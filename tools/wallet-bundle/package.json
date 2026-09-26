@@ -6,6 +6,6 @@
     "@stacks/connect": "7.10.0",
     "@stacks/network": "6.17.0",
     "@stacks/transactions": "6.17.0",
-    "esbuild": "0.24.0"
+    "esbuild": "0.28.2"
   }
 }
