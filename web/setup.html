@@ -76,6 +76,7 @@
       <input id="ipfsGw" placeholder="http://127.0.0.1:8080">
       <button class="ghost small" id="testNode">Test my node</button>
       <div class="status"><i class="dot" id="nodeDot"></i><span id="nodeOut">not tested yet</span></div>
+      <div id="reachOut" class="note" style="display:none"></div>
       <p class="sub">No node yet? <a href="/guide#node" target="_blank">One command sets one up →</a></p>
     </div>
     <div id="pinataBox">
@@ -85,7 +86,7 @@
       <div class="status"><i class="dot" id="pinDot"></i><span id="pinOut">not tested yet</span></div>
       <p class="sub"><a href="/guide#pinata" target="_blank">How to get a Pinata key →</a> Stored only on this computer, in a file only you can read.</p>
     </div>
-    <details style="margin-top:12px"><summary>How NFTs link to the art (advanced)</summary>
+    <details style="margin-top:12px" id="linkDetails"><summary>How NFTs link to the art (advanced)</summary>
       <div class="choices" id="linkChoices">
         <div class="choice" data-link="ipfs"><b>ipfs:// links <span class="tag">recommended</span></b><span>Standard and portable: wallets use their own IPFS gateway. Works best when your files are on Pinata, or your node is reachable from the internet.</span></div>
         <div class="choice" data-link="gateway"><b>My public gateway</b><span>Links go through your own web address (e.g. https://ipfs.yourdomain.com). Best when your node is at home behind a router.</span></div>

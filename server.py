@@ -134,6 +134,22 @@ def check_ipfs(api):
     except Exception as e:
         return {"ok": False, "detail": f"can't reach an IPFS node at {api} ({type(e).__name__}). Is it running? See the Guide."}
 
+_PRIVATE = re.compile(r"^/ip[46]/(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|::1|fe80|fc|fd|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)", re.I)
+
+def check_reachable(api):
+    """Can the internet reach this node directly? A home node behind a router is often only reachable through a
+    slow relay; public gateways then time out and wallets show blank boxes for ipfs:// links."""
+    try:
+        _, b = _get(api.rstrip("/") + "/api/v0/id", data=b"", method="POST")
+        addrs = json.loads(b).get("Addresses") or []
+    except Exception:
+        return {"ok": False, "detail": "couldn't ask the node about its addresses"}
+    direct = [a for a in addrs if "/p2p-circuit" not in a and not _PRIVATE.match(a)]
+    if direct:
+        return {"ok": True, "detail": "your node has a public address, so ipfs:// links should work"}
+    return {"ok": False, "detail": "your node is only reachable through a relay (it's behind a router). Public gateways "
+            "will likely time out on ipfs:// links, so use 'My public gateway', add Pinata, or forward port 4001 (see the Guide)."}
+
 def check_pinata(jwt):
     if not jwt: return {"ok": False, "detail": "no Pinata key saved yet"}
     try:
@@ -166,7 +182,9 @@ def do_check(cfg, body):
     c = {**cfg, **{k: v for k, v in body.items() if k in ("ipfs_api", "ollama_url", "public_gateway")}}
     jwt = body.get("pinata_jwt") or cfg.get("pinata_jwt", "")
     out = {}
-    if what in ("all", "ipfs"): out["ipfs"] = check_ipfs(c["ipfs_api"])
+    if what in ("all", "ipfs"):
+        out["ipfs"] = check_ipfs(c["ipfs_api"])
+        if out["ipfs"]["ok"]: out["reach"] = check_reachable(c["ipfs_api"])
     if what in ("all", "pinata"): out["pinata"] = check_pinata(jwt)
     if what in ("all", "ollama"): out["ollama"] = check_ollama(c["ollama_url"])
     if what in ("all", "gateway"): out["gateway"] = check_gateway(c.get("public_gateway", ""))

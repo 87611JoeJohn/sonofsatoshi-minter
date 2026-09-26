@@ -48,7 +48,14 @@ function dot(id, ok, text, outId) { $(id).className = 'dot ' + (ok ? 'ok' : 'no'
 async function testNode() {
   $('#nodeOut').textContent = 'testing…';
   const r = await api('/api/check', { what: 'ipfs', ipfs_api: $('#ipfsApi').value.trim() || 'http://127.0.0.1:5001' });
-  dot('#nodeDot', r.ipfs.ok, r.ipfs.detail, '#nodeOut'); return r.ipfs.ok;
+  dot('#nodeDot', r.ipfs.ok, r.ipfs.detail, '#nodeOut');
+  const w = $('#reachOut');
+  if (r.reach) {
+    w.style.display = ''; w.className = 'note' + (r.reach.ok ? '' : ' warn');
+    w.innerHTML = (r.reach.ok ? '✓ ' : '⚠ ') + r.reach.detail.replace(/[<>&]/g, '');
+    if (!r.reach.ok && S.storage === 'node' && S.link_style === 'ipfs') { $('#linkDetails').open = true; }
+  } else w.style.display = 'none';
+  return r.ipfs.ok;
 }
 async function testPinata() {
   $('#pinOut').textContent = 'testing…';
