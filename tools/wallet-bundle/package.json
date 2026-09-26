@@ -3,7 +3,7 @@
   "private": true,
   "description": "Rebuilds web/stacks.js reproducibly. See build.sh.",
   "dependencies": {
-    "@stacks/connect": "7.10.0",
+    "@stacks/connect": "8.2.7",
     "@stacks/network": "6.17.0",
     "@stacks/transactions": "6.17.0",
     "esbuild": "0.24.0"
