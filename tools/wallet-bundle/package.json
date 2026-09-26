@@ -5,7 +5,7 @@
   "dependencies": {
     "@stacks/connect": "7.10.0",
     "@stacks/network": "6.17.0",
-    "@stacks/transactions": "6.17.0",
+    "@stacks/transactions": "7.6.0",
     "esbuild": "0.24.0"
   }
 }
