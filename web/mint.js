@@ -54,6 +54,8 @@ async function waitTx(txid, label, outId) {
 
 // ---------- state ----------
 async function refreshState() {
+  // re-read the collection each time: if you stored a new version while this page was open, use it
+  try { const fresh = await api('/api/mintinfo?name=' + encodeURIComponent(NAME)); if (!fresh.error) INFO = { ...INFO, ...fresh, state: fresh.state || INFO.state }; } catch { }
   const isDeployed = await deployed();
   $('#deploy').disabled = !ADDR || isDeployed || !INFO.ready;
   if (isDeployed) out('#oDep', `✓ deployed: <code>${esc(CID)}</code>`, 'good');
@@ -151,7 +153,7 @@ function call(fn, args, label) {
   $('#connect').onclick = connect;
   $('#disconnect').onclick = () => { session.signUserOut(); location.reload(); };
   $('#deploy').onclick = deploy; $('#mint').onclick = mint;
-  $('#repoint').onclick = () => call('set-base-uri', [stringAsciiCV(INFO.base_uri)], 're-point');
+  $('#repoint').onclick = async () => { await refreshState(); call('set-base-uri', [stringAsciiCV(INFO.base_uri)], 're-point'); };
   $('#refresh').onclick = () => call('refresh-metadata', [], 'wallet refresh');
   $('#royalty').onclick = () => {
     const pct = Math.max(0, Math.min(30, +$('#rPct').value || 0)), a = $('#rAddr').value.trim().toUpperCase();
@@ -159,6 +161,7 @@ function call(fn, args, label) {
     call('set-royalty', [uintCV(Math.round(pct * 100)), standardPrincipalCV(a)], `royalty ${pct}%`);
   };
   $('#freezeConfirm').oninput = () => { if (ADDR) refreshState(); };
+  setInterval(() => { if (ADDR && !document.hidden) refreshState(); }, 60000);
   $('#freeze').onclick = () => { if (confirm('Freeze forever? Nobody, including you, can change the art or stories after this.')) call('freeze-metadata', [], 'freeze'); };
   if (session.isUserSignedIn()) onConnected();
 })();
