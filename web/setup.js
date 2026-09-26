@@ -88,8 +88,10 @@ async function testAi() {
 }
 function summary() {
   const store = { node: 'your own IPFS node', pinata: 'Pinata', both: 'your IPFS node + Pinata' }[S.storage];
-  $('#summary').innerHTML = `<b>Network:</b> ${S.network}<br><b>Mint to:</b> <code>${($('#owner').value.trim() || '— not set').replace(/[<>&]/g, '')}</code><br>` +
-    `<b>Art stored on:</b> ${store}<br><b>AI stories:</b> ${$('#aiOn').checked ? 'on (' + $('#visionModel').value + ' + ' + $('#writerModel').value + ')' : 'off'}`;
+  const rows = [['Network', S.network], ['Mint to', $('#owner').value.trim() || '— not set'], ['Art stored on', store],
+    ['AI stories', $('#aiOn').checked ? `on (${$('#visionModel').value} + ${$('#writerModel').value})` : 'off']];
+  $('#summary').replaceChildren(...rows.map(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b');
+    b.textContent = k + ': '; d.append(b, document.createTextNode(v)); return d; }));
 }
 async function finish() {
   if (!checkAddr()) { show(2); return; }

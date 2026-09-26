@@ -211,6 +211,13 @@ def contract_name(name):
         c = c[:33].rstrip("-") + "-" + hashlib.sha256(sanitize(name).encode()).hexdigest()[:6]
     return c
 
+def _contract_file(base, name):
+    """<collection>/contract/<contract-name>.clar, checked to stay inside the collection's folder."""
+    d = os.path.realpath(os.path.join(str(base), "contract"))
+    f = os.path.realpath(os.path.join(d, contract_name(name) + ".clar"))
+    if not f.startswith(d + os.sep): raise ValueError("bad contract path")
+    return Path(f)
+
 def project_path(name):
     """The collection's folder, guaranteed to be directly inside the projects folder (no path tricks)."""
     root = os.path.realpath(str(PROJECTS))
@@ -432,7 +439,7 @@ def write_contract(cfg, base, name, body=None, base_uri=None):
     if base_uri is None: base_uri = st.get("base_uri") or "<BASE_URI>"
     (base / "contract").mkdir(parents=True, exist_ok=True)
     supply = max(1, len(list_images(base / "images")))
-    (base / "contract" / f"{cname}.clar").write_text(
+    _contract_file(base, name).write_text(
         build_contract(name, cname, base_uri, bps, raddr, cfg.get("network", "testnet"), supply))
     return cname
 
@@ -817,7 +824,7 @@ def do_publish(cfg, body):
 def mint_info(cfg, name):
     base = project_path(name)
     cname = contract_name(name)
-    cf = base / "contract" / f"{cname}.clar"
+    cf = _contract_file(base, name)
     if not cf.exists(): return 400, {"error": "build the collection first"}
     st = _read_state(base)
     count = len(list_images(base / "images"))
@@ -844,6 +851,8 @@ def record_tx(body):
 PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html",
          "/mint": "mint.html", "/settings": "setup.html"}
 STATIC = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json"}
+# the only files /static/ can ever serve: the app's own web/ folder, listed once at startup
+STATIC_FILES = {f.name: f for f in WEB.iterdir() if f.is_file() and f.suffix in STATIC} if WEB.exists() else {}
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
        "connect-src 'self' https://api.hiro.so https://api.mainnet.hiro.so https://api.testnet.hiro.so; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
@@ -893,9 +902,8 @@ class H(BaseHTTPRequestHandler):
                 self.send_response(302); self.send_header("Location", "/setup"); self.end_headers(); return
             return self._send(200, (WEB / PAGES[p]).read_bytes(), "text/html; charset=utf-8")
         if p.startswith("/static/"):
-            f = (WEB / p[len("/static/"):]).resolve()
-            if WEB.resolve() in f.parents and f.is_file() and f.suffix in STATIC:
-                return self._send(200, f.read_bytes(), STATIC[f.suffix])
+            f = STATIC_FILES.get(p[len("/static/"):])
+            if f: return self._send(200, f.read_bytes(), STATIC[f.suffix])
             return self._send(404, {"error": "not found"})
         if p == "/api/config": return self._send(200, public_config(cfg))
         if p == "/api/projects": return self._send(200, {"projects": list_projects()})
