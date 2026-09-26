@@ -71,7 +71,7 @@ function fillModels(sel, models, want, prefer) {
   const opts = models.length ? models : [want];
   let chosen = opts.find(m => m === want || m.split(':')[0] === want.split(':')[0]);
   if (!chosen) chosen = opts.find(m => prefer.some(p => m.startsWith(p))) || opts[0];
-  sel.innerHTML = opts.map(m => `<option${m === chosen ? ' selected' : ''}>${m.replace(/[<>&"]/g, '')}</option>`).join('');
+  sel.replaceChildren(...opts.map(m => { const o = document.createElement('option'); o.textContent = m; o.selected = m === chosen; return o; }));
 }
 async function testAi() {
   $('#aiOut').textContent = 'checking for Ollama…';

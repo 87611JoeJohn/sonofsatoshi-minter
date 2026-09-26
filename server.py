@@ -212,7 +212,12 @@ def contract_name(name):
     return c
 
 def project_path(name):
-    return PROJECTS / sanitize(name)
+    """The collection's folder, guaranteed to be directly inside the projects folder (no path tricks)."""
+    root = os.path.realpath(str(PROJECTS))
+    full = os.path.realpath(os.path.join(root, sanitize(name)))
+    if not full.startswith(root + os.sep) or os.path.dirname(full) != root:
+        raise ValueError("bad collection name")
+    return Path(full)
 
 def _claim(base, name):
     """One folder = one collection: refuse to mix two collections whose names sanitize alike."""
