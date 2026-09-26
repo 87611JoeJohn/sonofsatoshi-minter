@@ -15,7 +15,7 @@ const log = m => $('#log').insertAdjacentHTML('afterbegin', '<div>' + new Date()
 const out = (id, m, c) => { const o = $(id); o.innerHTML = m; o.className = 'out' + (c ? ' ' + c : ''); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function api(path, body) {
-  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-SOS-Minter': '1' }, body: body ? JSON.stringify(body) : undefined });
   return r.json();
 }
 const record = (kind, txid, extra = {}) => api('/api/record-tx', { collection_name: NAME, kind, txid, ...extra });
@@ -60,18 +60,25 @@ async function refreshState() {
   $('#deploy').disabled = !ADDR || isDeployed || !INFO.ready;
   if (isDeployed) out('#oDep', `✓ deployed: <code>${esc(CID)}</code>`, 'good');
   else if (ADDR) out('#oDep', INFO.ready ? 'ready to deploy from ' + `<code>${esc(ADDR)}</code>` : '✕ store the collection on IPFS first (step 4 on the main page)', INFO.ready ? '' : 'bad');
-  let minted = 0;
-  if (isDeployed) { try { minted = hexUint(await readOnly('get-last-token-id')); } catch { } }
+  let minted = 0, mismatch = false;
+  if (isDeployed) {
+    try { minted = hexUint(await readOnly('get-last-token-id')); } catch { }
+    // safety: never act on a live contract that isn't this collection (e.g. an older collection with the same name)
+    try { mismatch = hexUint(await readOnly('get-max-supply')) !== INFO.count; } catch { mismatch = true; }
+    if (mismatch) out('#oDep', `⚠ <code>${esc(CID)}</code> is live but it isn't this collection (its size doesn't match ${INFO.count} pieces). ` +
+      'Nothing here will touch it. Rename this collection to deploy a new contract.', 'bad');
+  }
+  if (INFO.stale) out('#oDep', '⚠ You added or removed images after storing. Go back and press <b>Store on IPFS</b> again before minting.', 'bad');
   const total = INFO.count;
   $('#mintBar').style.width = Math.min(100, Math.round(minted / Math.max(1, total) * 100)) + '%';
   out('#oMintCount', `${minted} of ${total} minted`, minted >= total ? 'good' : '');
   const left = Math.max(0, total - minted), next = Math.min(200, left);
   $('#mint').textContent = left ? `② Mint ${next}${left > 200 ? ` (round ${Math.floor(minted / 200) + 1} of ${Math.ceil(total / 200)})` : ''}` : '✓ All minted';
-  $('#mint').disabled = !ADDR || !isDeployed || !left || !owner();
-  const tools = ADDR && isDeployed && owner();
+  $('#mint').disabled = !ADDR || !isDeployed || !left || !owner() || mismatch || INFO.stale;
+  const tools = ADDR && isDeployed && owner() && !mismatch;
   ['#repoint', '#refresh', '#royalty'].forEach(s => $(s).disabled = !tools);
   $('#freeze').disabled = !tools || $('#freezeConfirm').value.trim() !== 'FREEZE';
-  if (isDeployed) {
+  if (isDeployed && !mismatch) {
     try {
       const frozen = (await readOnly('is-frozen')).endsWith('03');
       const onchain = hexAsciiOpt(await readOnly('get-token-uri', ['0x0100000000000000000000000000000001']));
@@ -100,7 +107,7 @@ function onConnected() {
 function deploy() {
   CID = `${ADDR}.${INFO.contract_name}`;
   const code = INFO.code_body.split(SELF_ID).join(`'${CID}`);
-  openContractDeploy({ contractName: INFO.contract_name, codeBody: code, network: net(), appDetails: app(),
+  openContractDeploy({ contractName: INFO.contract_name, codeBody: code, network: net(), appDetails: app(), postConditionMode: PostConditionMode.Deny,
     onFinish: async d => {
       log(`deploy sent · <a href="${explorer(d.txId)}" target="_blank" rel="noopener">${d.txId.slice(0, 14)}…</a>`);
       await record('deploy', d.txId, { contract_id: CID });
@@ -118,7 +125,7 @@ async function mint() {
   const n = Math.min(200, left), to = INFO.recipient || ADDR;
   openContractCall({ contractAddress: CID.split('.')[0], contractName: CID.split('.')[1], functionName: 'mint-many',
     functionArgs: [listCV(Array.from({ length: n }, () => standardPrincipalCV(to)))],
-    network: net(), postConditionMode: PostConditionMode.Allow, appDetails: app(),
+    network: net(), postConditionMode: PostConditionMode.Deny, appDetails: app(),
     onFinish: async d => {
       log(`mint of ${n} sent · <a href="${explorer(d.txId)}" target="_blank" rel="noopener">${d.txId.slice(0, 14)}…</a>`);
       await record('mint', d.txId, { count: n }); $('#mint').disabled = true;
@@ -128,7 +135,7 @@ async function mint() {
 }
 function call(fn, args, label) {
   openContractCall({ contractAddress: CID.split('.')[0], contractName: CID.split('.')[1], functionName: fn, functionArgs: args,
-    network: net(), postConditionMode: PostConditionMode.Allow, appDetails: app(),
+    network: net(), postConditionMode: PostConditionMode.Deny, appDetails: app(),
     onFinish: async d => {
       log(`${label} sent · <a href="${explorer(d.txId)}" target="_blank" rel="noopener">${d.txId.slice(0, 14)}…</a>`);
       await record(fn, d.txId);

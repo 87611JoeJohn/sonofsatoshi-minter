@@ -89,14 +89,16 @@ Each collection gets its own SIP-009 contract, generated in plain Clarity you ca
 
 | Function | Who | What |
 |---|---|---|
-| `mint`, `mint-many` | owner | mint to any address, up to 200 per call |
+| `mint`, `mint-many` | owner | mint to any address, up to 200 per call, never beyond the **fixed maximum supply** |
 | `set-base-uri`, `set-token-uri` | owner | point the collection (or one token) at new metadata |
 | `refresh-metadata` | owner | SIP-019 notice so Hiro, wallets and marketplaces re-read |
 | `set-royalty` | owner | royalty in basis points (max 30%) and who receives it |
 | `freeze-metadata` | owner | **one-way**: art and stories can never change again |
-| `transfer`, `get-owner`, `get-token-uri`, `get-last-token-id`, `get-royalty-info`, `is-frozen` | anyone | standard reads and transfers |
+| `transfer`, `get-owner`, `get-token-uri`, `get-last-token-id`, `get-max-supply`, `get-royalty-info`, `is-frozen` | anyone | standard reads and transfers |
 
-The owner is the wallet that deploys it. Keep that wallet safe.
+The owner is the wallet that deploys it. Keep that wallet safe. The collection size is written into the contract, so
+collectors know the creator can never mint extra pieces. Every wallet request is sent in **post-condition Deny mode**,
+so the wallet itself blocks any transaction that would move coins or tokens out of your account.
 
 ## Your files
 

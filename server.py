@@ -66,8 +66,9 @@ def load_config():
 def save_config(cfg):
     DATA.mkdir(parents=True, exist_ok=True)
     tmp = CONFIG.with_suffix(".tmp")
-    tmp.write_text(json.dumps(cfg, indent=2))
-    os.chmod(tmp, 0o600)                                   # holds the Pinata key: owner-only
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)   # owner-only from the first byte (holds the Pinata key)
+    with os.fdopen(fd, "w") as f: f.write(json.dumps(cfg, indent=2))
+    os.chmod(tmp, 0o600)
     tmp.replace(CONFIG)
 
 def public_config(cfg):
@@ -79,7 +80,7 @@ def public_config(cfg):
     return out
 
 _ADDR_RE = re.compile(r"^S[PMTN][0-9A-HJKMNP-TV-Z]{38,40}$")
-_URL_RE = re.compile(r"^https?://[^\s\"'<>]+$")
+_URL_RE = re.compile(r"^https?://[A-Za-z0-9._~:/?#\[\]@!$&()*+,;=%-]+$")   # plain ASCII URL characters only
 
 def update_config(body):
     """Validate + merge settings coming from the setup wizard / settings page."""
@@ -179,7 +180,12 @@ def check_gateway(gw):
 
 def do_check(cfg, body):
     what = body.get("what") or "all"
-    c = {**cfg, **{k: v for k, v in body.items() if k in ("ipfs_api", "ollama_url", "public_gateway")}}
+    c = dict(cfg)
+    for k in ("ipfs_api", "ollama_url", "public_gateway"):
+        if k in body:
+            v = str(body[k]).strip().rstrip("/")
+            if v and not _URL_RE.match(v): return 400, {"error": f"{k} must start with http:// or https://"}
+            c[k] = v
     jwt = body.get("pinata_jwt") or cfg.get("pinata_jwt", "")
     out = {}
     if what in ("all", "ipfs"):
@@ -196,10 +202,14 @@ def sanitize(name):
     return re.sub(r" +", "_", name.title()) or "My_NFT_Collection"
 
 def contract_name(name):
-    """Clarity contract names: lowercase letters, digits, hyphens; start with a letter; max 40."""
+    """Clarity contract names: lowercase letters, digits, hyphens; start with a letter; max 40.
+    Long names get a short tag from the full name, so two collections can never share a contract name."""
+    import hashlib
     c = sanitize(name).lower().replace("_", "-")
     if not c[0].isalpha(): c = "nft-" + c
-    return c[:40].rstrip("-")
+    if len(c) > 40:
+        c = c[:33].rstrip("-") + "-" + hashlib.sha256(sanitize(name).encode()).hexdigest()[:6]
+    return c
 
 def project_path(name):
     return PROJECTS / sanitize(name)
@@ -313,7 +323,12 @@ def do_upload(cfg, body):
     if err: return 409, {"error": err}
     imgdir = base / "images"; imgdir.mkdir(parents=True, exist_ok=True)
     if body.get("mode") == "replace":
+        # new art = start fresh: old stories, AI notes and the old story of the collection no longer match
+        import shutil
         for f in list_images(imgdir): f.unlink()
+        for f in (base / "metadata").glob("*.json") if (base / "metadata").exists() else []: f.unlink()
+        shutil.rmtree(base / ".ai-vision", ignore_errors=True)
+        if (base / "collection.json").exists(): (base / "collection.json").unlink()
     start = len(list_images(imgdir))
     for i, (raw, ext) in enumerate(good, 1):
         (imgdir / f"{start + i:04d}{ext}").write_bytes(raw)
@@ -399,6 +414,11 @@ SELF_ID = "'SELF.CONTRACT_ID"
 def write_contract(cfg, base, name, body=None, base_uri=None):
     """(Re)write the contract. Keeps the stored base-uri unless a new one is given."""
     body = body or {}; st = _read_state(base)
+    if "royalty_pct" in body:
+        import math
+        try: rp = float(body["royalty_pct"])
+        except Exception: rp = float("nan")
+        if not math.isfinite(rp) or not 0 <= rp <= 30: raise ValueError("royalty must be a number from 0 to 30")
     if "royalty_pct" in body or body.get("royalty_addr"):
         st = _write_state(base, royalty_pct=body.get("royalty_pct", st.get("royalty_pct")),
                           royalty_addr=str(body.get("royalty_addr") or st.get("royalty_addr") or "").strip().upper())
@@ -406,13 +426,16 @@ def write_contract(cfg, base, name, body=None, base_uri=None):
     cname = contract_name(name)
     if base_uri is None: base_uri = st.get("base_uri") or "<BASE_URI>"
     (base / "contract").mkdir(parents=True, exist_ok=True)
+    supply = max(1, len(list_images(base / "images")))
     (base / "contract" / f"{cname}.clar").write_text(
-        build_contract(name, cname, base_uri, bps, raddr, cfg.get("network", "testnet")))
+        build_contract(name, cname, base_uri, bps, raddr, cfg.get("network", "testnet"), supply))
     return cname
 
-def build_contract(display, cname, base_uri, royalty_bps, royalty_addr, network="testnet"):
+def build_contract(display, cname, base_uri, royalty_bps, royalty_addr, network="testnet", max_supply=1):
     safe_display = re.sub(r"[^A-Za-z0-9 #'.,!-]", "", display)[:80]
     code = f""";; {safe_display} - SIP-009 NFT, made with SonOfSatoshi Minter {VERSION}
+;; Owner functions only accept the owner's DIRECT call (contract-caller), so no other contract
+;; the owner interacts with can ever act on this collection in their name.
 ;; The owner (the wallet that deploys this) mints, can re-point the metadata after edits,
 ;; can ask wallets to refresh (SIP-019), and can FREEZE the metadata forever.
 
@@ -422,6 +445,10 @@ def build_contract(display, cname, base_uri, royalty_bps, royalty_addr, network=
 (define-constant err-owner-only (err u100))
 (define-constant err-not-token-owner (err u101))
 (define-constant err-frozen (err u102))
+(define-constant err-sold-out (err u104))
+
+;; the collection size is fixed forever: not even the owner can mint more than this
+(define-constant max-supply u{int(max_supply)})
 
 (define-data-var last-token-id uint u0)
 (define-data-var base-uri (string-ascii 256) "{base_uri}")
@@ -436,14 +463,15 @@ def build_contract(display, cname, base_uri, royalty_bps, royalty_addr, network=
   (ok {{ bps: (var-get royalty-bps), address: (var-get royalty-address) }}))
 
 (define-public (set-royalty (bps uint) (addr principal))
-  (begin (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+  (begin (asserts! (is-eq contract-caller contract-owner) err-owner-only)
     (asserts! (<= bps u3000) (err u103))
     (var-set royalty-bps bps) (var-set royalty-address addr) (ok true)))
 
 ;; ---- minting (owner only) ----
 (define-public (mint (recipient principal))
   (let ((token-id (+ (var-get last-token-id) u1)))
-    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (is-eq contract-caller contract-owner) err-owner-only)
+    (asserts! (<= token-id max-supply) err-sold-out)
     (try! (nft-mint? {cname} token-id recipient))
     (var-set last-token-id token-id)
     (ok token-id)))
@@ -451,16 +479,20 @@ def build_contract(display, cname, base_uri, royalty_bps, royalty_addr, network=
 ;; mint up to 200 at a time: (mint-many (list 'SP... 'SP... ...)) - one token per recipient
 (define-public (mint-many (recipients (list 200 principal)))
   (begin
-    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (is-eq contract-caller contract-owner) err-owner-only)
     (ok (map mint-one recipients))))
 
 (define-private (mint-one (recipient principal))
   (let ((token-id (+ (var-get last-token-id) u1)))
+    (asserts! (<= token-id max-supply) err-sold-out)
+    (try! (nft-mint? {cname} token-id recipient))
     (var-set last-token-id token-id)
-    (nft-mint? {cname} token-id recipient)))
+    (ok true)))
 
 ;; ---- metadata ----
 (define-read-only (get-last-token-id) (ok (var-get last-token-id)))
+
+(define-read-only (get-max-supply) (ok max-supply))
 
 (define-read-only (get-token-uri (token-id uint))
   (ok (some (default-to (var-get base-uri) (map-get? token-uris token-id)))))
@@ -469,25 +501,25 @@ def build_contract(display, cname, base_uri, royalty_bps, royalty_addr, network=
 
 ;; point the whole collection at a new metadata folder (after edits / moving storage)
 (define-public (set-base-uri (uri (string-ascii 256)))
-  (begin (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+  (begin (asserts! (is-eq contract-caller contract-owner) err-owner-only)
     (asserts! (not (var-get frozen)) err-frozen)
     (var-set base-uri uri) (ok true)))
 
 ;; give one token its own metadata address
 (define-public (set-token-uri (token-id uint) (uri (string-ascii 256)))
-  (begin (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+  (begin (asserts! (is-eq contract-caller contract-owner) err-owner-only)
     (asserts! (not (var-get frozen)) err-frozen)
     (map-set token-uris token-id uri) (ok true)))
 
 ;; SIP-019: tell indexers (Hiro -> Xverse, Leather, marketplaces) to re-read every token's metadata
 (define-public (refresh-metadata)
-  (begin (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+  (begin (asserts! (is-eq contract-caller contract-owner) err-owner-only)
     (print {{ notification: "token-metadata-update", payload: {{ token-class: "nft", contract-id: {SELF_ID} }} }})
     (ok true)))
 
 ;; one-way: after this the art and stories can never be changed by anyone, including you
 (define-public (freeze-metadata)
-  (begin (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+  (begin (asserts! (is-eq contract-caller contract-owner) err-owner-only)
     (var-set frozen true) (ok true)))
 
 ;; ---- ownership ----
@@ -769,7 +801,7 @@ def do_publish(cfg, body):
     uri = _link(cfg, cid, "metadata/{id}.json")
     if len(uri) > 256: return 400, {"error": "the metadata address is too long for the contract — use ipfs:// links in Settings"}
     write_contract(cfg, base, name, body, base_uri=uri)
-    st = _write_state(base, cid=cid, base_uri=uri, stored_on=notes)
+    st = _write_state(base, cid=cid, base_uri=uri, stored_on=notes, published_count=len(metas))
     first = list_images(base / "images")[0].name
     return 200, {"ok": True, "cid": cid, "base_uri": uri, "stored_on": notes,
                  "preview": f"{cfg.get('ipfs_gateway','').rstrip('/')}/ipfs/{cid}/images/{first}" if cfg.get("storage") != "pinata"
@@ -783,10 +815,12 @@ def mint_info(cfg, name):
     cf = base / "contract" / f"{cname}.clar"
     if not cf.exists(): return 400, {"error": "build the collection first"}
     st = _read_state(base)
-    if not st.get("deployed_contract"): write_contract(cfg, base, name)      # follow network/royalty changes until deployed
+    count = len(list_images(base / "images"))
+    stale = bool(st.get("base_uri")) and st.get("published_count") != count
+    if not st.get("deployed_contract") and not stale: write_contract(cfg, base, name)   # follow settings until deployed
     code = cf.read_text()
     return 200, {"collection": name, "contract_name": cname, "code_body": code,
-                 "ready": "<BASE_URI>" not in code, "count": len(list_images(base / "images")),
+                 "ready": "<BASE_URI>" not in code and not stale, "count": count, "stale": stale,
                  "recipient": cfg.get("owner_address", ""), "network": cfg.get("network", "testnet"),
                  "base_uri": st.get("base_uri", ""), "state": st}
 
@@ -805,7 +839,7 @@ def record_tx(body):
 PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html",
          "/mint": "mint.html", "/settings": "setup.html"}
 STATIC = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json"}
-CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; "
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
        "connect-src 'self' https://api.hiro.so https://api.mainnet.hiro.so https://api.testnet.hiro.so; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
@@ -821,6 +855,8 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         if ctype.startswith("text/html"):
             self.send_header("Content-Security-Policy", CSP)
             self.send_header("X-Frame-Options", "DENY")
@@ -840,6 +876,10 @@ class H(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self):
+        try: return self._get()
+        except Exception as e: return self._send(500, {"error": f"{type(e).__name__}: {e}"})
+
+    def _get(self):
         if not self._host_ok(): return self._send(403, {"error": "open the app at http://127.0.0.1:%d" % PORT})
         u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query); p = u.path
         cfg = load_config()
@@ -868,11 +908,12 @@ class H(BaseHTTPRequestHandler):
         return self._send(404, {"error": "not found"})
 
     def do_POST(self):
-        if not self._host_ok() or not self._origin_ok(): return self._send(403, {"error": "blocked"})
+        if not self._host_ok() or not self._origin_ok() or self.headers.get("X-SOS-Minter") != "1":
+            return self._send(403, {"error": "blocked"})
         try: n = int(self.headers.get("Content-Length", 0))
         except ValueError: n = -1
         if n < 0 or n > MAX_BODY: return self._send(413, {"error": "upload too big for one request"})
-        try: body = json.loads(self.rfile.read(n) or b"{}")
+        try: body = json.loads(self.rfile.read(n) or b"{}", parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))
         except Exception: return self._send(400, {"error": "bad request"})
         if not isinstance(body, dict): return self._send(400, {"error": "bad request"})
         cfg = load_config(); p = self.path

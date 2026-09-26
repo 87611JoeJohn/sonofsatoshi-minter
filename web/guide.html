@@ -234,6 +234,8 @@ ollama pull qwen2.5:14b    # writes the stories (smaller computer? try llama3.2)
 <ul>
   <li>This app <b>never</b> asks for your secret words (seed phrase) or private key. If anything ever does, stop.</li>
   <li>Every transaction opens in <b>your wallet</b>: read it before approving. The mint page shows the full contract code.</li>
+  <li>Every request is sent in <b>"Deny" mode</b>: your wallet will refuse anything that would move STX or NFTs out of your account.</li>
+  <li>The contract fixes the <b>collection size</b> forever. Nobody, not even you, can mint extra pieces later, which is something collectors can check.</li>
   <li>The app only answers on <code>127.0.0.1</code> (your own computer) and refuses requests from other websites.</li>
   <li>Your Pinata key is stored only in <code>~/SonOfSatoshi-Minter/config.json</code>, readable only by you.</li>
   <li>Don't expose your IPFS node's port 5001 to the internet (section 4).</li>
