@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploy and mint — SonOfSatoshi Minter</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1>Deploy and mint</h1></a>
+  <span class="badge" id="net">…</span>
+  <nav><a href="/" id="back">← Back to the collection</a><a href="/guide#mint" target="_blank">📖 Help</a></nav>
+</header>
+<main>
+  <div class="card" id="info">loading…</div>
+
+  <div class="card">
+    <h2><span class="n">1</span>Connect your wallet</h2>
+    <p class="sub">Xverse or Leather. Using a Ledger? Pick the Ledger account in the wallet first. The wallet that deploys
+      becomes the <b>owner</b> of the collection, the only one who can mint or change it later.</p>
+    <button id="connect">🔗 Connect wallet</button> <button class="ghost small" id="disconnect" style="display:none">Disconnect</button>
+    <div class="out" id="oConn"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>Deploy the contract</h2>
+    <p class="sub">Puts your collection's contract on the blockchain (a one-time fee, usually well under 1 STX). You approve it in your wallet.</p>
+    <details><summary>See the contract code</summary><pre id="code"></pre></details>
+    <button id="deploy" disabled>① Deploy</button>
+    <div class="out" id="oDep"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>Mint</h2>
+    <p class="sub">Creates the NFTs and sends them to <b id="rcpt">your address</b>. Up to 200 per approval; big collections
+      take a few rounds. Each round waits for the last to confirm.</p>
+    <div class="bar"><i id="mintBar"></i></div>
+    <div class="out" id="oMintCount"></div>
+    <button id="mint" disabled>② Mint</button>
+    <div class="out" id="oMint"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span>After minting <span class="sub">(any time later)</span></h2>
+    <h3 style="margin:10px 0 2px">Re-point to your latest edits</h3>
+    <p class="sub">Edited stories or art and pressed <i>Store on IPFS</i> again? This points the contract at the new version.</p>
+    <div class="out" id="oUri"></div>
+    <button class="ghost" id="repoint" disabled>↪ Re-point</button>
+
+    <h3 style="margin:16px 0 2px">Ask wallets to refresh</h3>
+    <p class="sub">Tells Hiro, which Xverse, Leather and marketplaces read from, to re-read every piece. Use it after a re-point, or if pictures show as blank boxes.</p>
+    <button class="ghost" id="refresh" disabled>🔄 Refresh wallets</button>
+
+    <h3 style="margin:16px 0 2px">Change the royalty</h3>
+    <div class="row"><div><label>Royalty %</label><input id="rPct" type="number" min="0" max="30" step="0.5"></div>
+      <div><label>Paid to</label><input id="rAddr" placeholder="SP…/ST…"></div></div>
+    <button class="ghost" id="royalty" disabled>Set royalty</button>
+
+    <h3 style="margin:16px 0 2px">Freeze forever <span class="sub">(optional, can't be undone)</span></h3>
+    <p class="sub">Locks the art and stories permanently. Nobody can change them again, including you. Collectors like this
+      because it proves the art won't change. Only do it once everything is final.</p>
+    <input id="freezeConfirm" placeholder='type FREEZE to enable the button'>
+    <button class="danger" id="freeze" disabled>🧊 Freeze metadata</button>
+    <div class="out" id="oAfter"></div>
+  </div>
+
+  <div class="card"><h2>Activity</h2><div class="log" id="log"></div></div>
+</main>
+<script type="module" src="/static/mint.js"></script>
+</body></html>

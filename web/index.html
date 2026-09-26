@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SonOfSatoshi Minter</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1>SonOfSatoshi Minter</h1></a>
+  <span class="badge" id="net">…</span>
+  <nav><a href="/guide" target="_blank">📖 Guide</a><a href="/settings">⚙ Settings</a></nav>
+</header>
+<main>
+  <div class="card" id="projCard" style="display:none">
+    <h2>Your collections</h2>
+    <div id="projects"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">1</span>Collection and art</h2>
+    <p class="sub">Name it, then add every image. They're numbered 0001, 0002 … in the order you pick them (sorted by file name).</p>
+    <label>Collection name</label><input id="cname" placeholder="e.g. Guardians of the Block" maxlength="60">
+    <label>Images (PNG, JPG, WEBP or GIF)</label>
+    <input type="file" id="files" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
+    <div class="chk"><input type="checkbox" id="replace" checked><label for="replace" style="margin:0">Replace the images already in this collection (untick to add more)</label></div>
+    <button id="upBtn">⬆ Add images</button>
+    <div class="bar" id="upBar" style="display:none"><i></i></div>
+    <div class="out" id="o1"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>Rarity and stories</h2>
+    <div id="aiBox">
+      <p class="sub">✨ Your local AI looks at every piece, gives it traits and a rarity tier, and writes its story from what's
+        actually in the picture. Around 20–60 seconds per piece; you can close the page and come back.</p>
+      <label>Theme or world (optional)</label><input id="theme" placeholder="e.g. guardians of a fallen sky-city, hopeful tone">
+      <details><summary>Canon: facts the stories must respect (optional)</summary>
+        <textarea id="canon" rows="3" placeholder="e.g. Venti is a boy wizard from the north. The moon is a lantern hung by his grandmother."></textarea></details>
+      <button id="aiBtn">✨ Write rarity + stories with AI</button>
+      <div class="bar" id="aiBar" style="display:none"><i></i></div>
+      <div class="out" id="oAI"></div>
+    </div>
+    <div class="note" id="aiOff" style="display:none">AI is off. Turn it on in <a href="/settings">Settings</a> if you have Ollama, or use the manual option below.</div>
+    <details id="manual"><summary>Manual: my own description and trait weights (no AI)</summary>
+      <label>Description (every piece gets this)</label><textarea id="desc" rows="3" placeholder="The story behind the collection…"></textarea>
+      <p class="sub">Optional traits: each category picks a value per piece by weight (higher = more common), then pieces are scored and tiered.</p>
+      <div id="traits"></div>
+      <button class="ghost small" id="addTrait">＋ trait category</button>
+      <button id="manBtn" class="ghost">Build with these</button>
+      <div class="out" id="oMan"></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>Review and edit</h2>
+    <p class="sub">See each piece the way wallets will show it. Change any name, story, trait or rarity before you mint.</p>
+    <button class="ghost" id="loadBtn">↻ Show my collection</button>
+    <div class="out" id="oRev"></div>
+    <div id="lore" class="note" style="display:none"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span>Store it on IPFS</h2>
+    <p class="sub">Uploads the art and stories to <b id="storeName">your storage</b> and writes the final contract.
+      Run this again any time you edit something (then use <i>Re-point</i> on the mint page if you've already minted).</p>
+    <div class="row">
+      <div><label>Royalty %</label><input id="royPct" type="number" min="0" max="30" step="0.5"></div>
+      <div><label>Royalty goes to <span class="sub">(blank = your address)</span></label><input id="royAddr" placeholder="SP…/ST…"></div>
+    </div>
+    <button id="pubBtn">☁ Store on IPFS + finish the contract</button>
+    <div class="out" id="oPub"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">5</span>Deploy and mint</h2>
+    <p class="sub">Opens the wallet page: connect Xverse or Leather, deploy your contract, mint (in batches of 200 for big
+      collections). Everything is approved in your wallet.</p>
+    <a class="btn" id="mintLink" href="/mint">🪙 Go to deploy + mint →</a>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+</body></html>

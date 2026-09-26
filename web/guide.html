@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide — SonOfSatoshi Minter</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1>The Guide</h1></a>
+  <nav><a href="/">Open the minter</a><a href="/settings">⚙ Settings</a></nav>
+</header>
+<main class="guide">
+
+<div class="card toc">
+  <h2>Contents</h2>
+  <a href="#what">1. What this app does</a>
+  <a href="#need">2. What you need</a>
+  <a href="#ipfs">3. IPFS: where your art actually lives</a>
+  <a href="#node">4. Run your own IPFS node</a>
+  <a href="#pinata">5. The easy alternative: Pinata</a>
+  <a href="#links">6. ipfs:// links or your own gateway?</a>
+  <a href="#ai">7. AI stories and rarity (optional)</a>
+  <a href="#settings">8. What to put in each setting</a>
+  <a href="#use">9. Making a collection, step by step</a>
+  <a href="#mint">10. Deploy and mint</a>
+  <a href="#after">11. After minting: edit, refresh, royalty, freeze</a>
+  <a href="#backup">12. Keep a backup</a>
+  <a href="#costs">13. Costs</a>
+  <a href="#safety">14. Safety</a>
+  <a href="#trouble">15. When something goes wrong</a>
+</div>
+
+<div class="card">
+<h2 id="what">1. What this app does</h2>
+<p>You bring a folder of art. The app turns it into a finished NFT collection on <b>Stacks</b> (a Bitcoin layer):</p>
+<ol>
+  <li><b>Numbers</b> your pieces 0001, 0002 …</li>
+  <li>Gives each piece <b>traits, a rarity tier and a story</b>, written by an AI running on your own computer from what's
+    actually in the picture. Or you set traits yourself.</li>
+  <li>Lets you <b>review and edit</b> every piece exactly as wallets will show it.</li>
+  <li><b>Stores</b> the art and stories on IPFS (your own node, Pinata, or both).</li>
+  <li>Writes the <b>contract</b>, which you deploy and mint from <b>your own wallet</b>.</li>
+</ol>
+<p>It runs only on your computer at <code>http://127.0.0.1:8130</code>. There's no account, no company server, and no fee
+  to us. You pay only the normal network fees.</p>
+</div>
+
+<div class="card">
+<h2 id="need">2. What you need</h2>
+<table>
+  <tr><th>Thing</th><th>Why</th><th>Required?</th></tr>
+  <tr><td><b>Python 3.10+</b></td><td>Runs the app. Already on most Linux and Mac computers; on Windows get it from python.org.</td><td>Yes</td></tr>
+  <tr><td><b>Xverse</b> or <b>Leather</b> wallet (browser extension)</td><td>Signs the deploy and the mints. A Ledger works through either.</td><td>Yes</td></tr>
+  <tr><td><b>A little STX</b></td><td>Network fees. Free test STX on testnet (see <a href="#costs">Costs</a>).</td><td>Yes</td></tr>
+  <tr><td><b>Storage</b>: your own IPFS node <i>or</i> a Pinata account</td><td>Keeps your art online (section 3).</td><td>One of them</td></tr>
+  <tr><td><b>Ollama</b> + a GPU</td><td>AI stories and rarity.</td><td>No</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2 id="ipfs">3. IPFS: where your art actually lives</h2>
+<p>This is the part most people get wrong, so it's worth two minutes.</p>
+<p>The blockchain doesn't hold your picture. An NFT is a small record that says <i>"token #12 belongs to this person, and
+  its details are at this address."</i> The picture and its story live at that address, on <b>IPFS</b>.</p>
+<p>IPFS addresses files by their <b>fingerprint</b> (called a <b>CID</b>, like <code>bafybei…</code>). The same file always has
+  the same CID, and any copy anywhere can answer for it. That's great, with one catch: <b>somebody has to keep a copy
+  online</b>. That's called <b>pinning</b>. If nobody pins your files, your NFTs still exist, but every wallet shows
+  <b>blank boxes</b>.</p>
+<div class="note warn"><b>This really happens.</b> The author of this app lost the art behind several collections when the
+  computer running his IPFS node was wiped. The NFTs were fine; the pictures were gone until he restored them from his own
+  backups. Hosting companies shut down too. Whoever holds the files decides whether your art is visible.</div>
+<p>You have three choices:</p>
+<table>
+  <tr><th></th><th>How</th><th>Good</th><th>Watch out</th></tr>
+  <tr><td>🏠 <b>Your own node</b></td><td>A free program on a computer you own (section 4).</td><td>Nobody can switch it off. No limits, no fees.</td><td>The computer should stay on. Back it up.</td></tr>
+  <tr><td>☁️ <b>Pinata</b></td><td>A company pins it for you (section 5).</td><td>Easiest; nothing to run.</td><td>Free plan is small. Your art depends on your account staying paid and open.</td></tr>
+  <tr><td>🛡️ <b>Both</b></td><td>Stored on your node and on Pinata.</td><td>If either one fails, the other still serves it.</td><td>A little more setup.</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2 id="node">4. Run your own IPFS node</h2>
+<p>Any computer that stays on works: a mini PC, an old laptop, a home server. The simplest way is
+  <b>Docker</b> (<a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">install Docker</a>), then one command:</p>
+<pre>docker run -d --name ipfs --restart unless-stopped \
+  -v ipfs_data:/data/ipfs \
+  -p 4001:4001 -p 4001:4001/udp \
+  -p 127.0.0.1:5001:5001 \
+  -p 127.0.0.1:8080:8080 \
+  ipfs/kubo:latest</pre>
+<p>That's it. In the app's setup, use:</p>
+<ul>
+  <li><b>IPFS node address (API):</b> <code>http://127.0.0.1:5001</code></li>
+  <li><b>Gateway:</b> <code>http://127.0.0.1:8080</code></li>
+</ul>
+<h3>Node on a different computer?</h3>
+<p>Run the minter on the same machine as the node (simplest), or let the node's API listen on your home network by changing
+  <code>127.0.0.1:5001:5001</code> to <code>5001:5001</code> and, on the node, running
+  <code>docker exec ipfs ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001</code> then <code>docker restart ipfs</code>.
+  Then use <code>http://&lt;node-ip&gt;:5001</code> in the app.</p>
+<div class="note bad"><b>Never open port 5001 to the internet.</b> Anyone who can reach it can control your node. Keep it on your
+  own computer or home network. (Port 4001 is the safe one; that's how other IPFS nodes find your files.)</div>
+<h3>Without Docker</h3>
+<p>Install <b>Kubo</b> from <a href="https://docs.ipfs.tech/install/command-line/" target="_blank" rel="noopener">docs.ipfs.tech</a>,
+  then <code>ipfs init</code> and <code>ipfs daemon</code> (keep it running, or make it a service).
+  <b>IPFS Desktop</b> also works and uses the same addresses.</p>
+<h3>Can the world see my node?</h3>
+<p>Wallets fetch your art from public IPFS gateways, which find your node through port <b>4001</b>. Most home routers
+  allow it automatically; if pictures don't load for others, forward TCP/UDP 4001 to the node. Or skip all of that and
+  give your node a public web address (section 6), or add Pinata as the always-reachable copy.</p>
+</div>
+
+<div class="card">
+<h2 id="pinata">5. The easy alternative: Pinata</h2>
+<ol>
+  <li>Sign up at <a href="https://pinata.cloud" target="_blank" rel="noopener">pinata.cloud</a>. There's a free plan (check their
+    site for the current limits; bigger collections need a paid plan).</li>
+  <li>Open <b>API Keys</b> → <b>New Key</b>. Give it the <b>pinFileToIPFS</b> permission (or Admin, simpler), name it, create it.</li>
+  <li>Copy the long <b>JWT</b> (it starts with <code>eyJ</code>). Pinata shows it only once.</li>
+  <li>Paste it in the setup wizard and press <b>Test the key</b>.</li>
+</ol>
+<p>The key is saved only on your computer, in a file only your user can read, and it's never shown in the browser again.</p>
+</div>
+
+<div class="card">
+<h2 id="links">6. ipfs:// links or your own gateway?</h2>
+<p>Each piece's metadata points at its picture. There are two ways to write that link:</p>
+<ul>
+  <li><b><code>ipfs://bafy…/images/0001.png</code></b> (recommended). This is the standard: every wallet turns it into a working
+    link with its own gateway, and it never depends on a website of yours. Choose this with Pinata, or when your node is
+    reachable (section 4).</li>
+  <li><b><code>https://ipfs.yourdomain.com/ipfs/bafy…/…</code></b>: through <i>your own</i> public gateway. Useful when your node sits
+    at home behind a router that others can't reach. You'd put your node's gateway (port 8080) behind a web address,
+    for example with a <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener">Cloudflare Tunnel</a>
+    (free, no ports to open) or a reverse proxy. The link then depends on that address staying up, but you can repoint it
+    later (section 11).</li>
+</ul>
+</div>
+
+<div class="card">
+<h2 id="ai">7. AI stories and rarity (optional)</h2>
+<p>Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> (free, runs on your own machine), then pull two models:</p>
+<pre>ollama pull llava          # looks at the pictures
+ollama pull qwen2.5:14b    # writes the stories (smaller computer? try llama3.2)</pre>
+<p>For each piece the AI: describes what's in the picture → picks 5 traits → the app counts how rare each trait is across
+  the whole collection → assigns one of 12 tiers (Mythic, Celestial, Divine, Legendary, Ascendant, Relic, Epic, Rare, Elite,
+  Uncommon, Common, Base) → writes a story that fits the picture and its rarity.</p>
+<p>It takes roughly 20–60 seconds per piece with a decent GPU. It remembers its progress, so you can stop and continue.
+  <b>AI makes mistakes</b>: it may call a book a scroll or get a colour wrong. Always review in step 3.</p>
+<p>No GPU? Use the <b>manual</b> option: one description for all pieces, plus trait categories with weights
+  (e.g. <i>Background: Gold:5, Night:30, Dawn:65</i>). Rarer values give higher tiers.</p>
+</div>
+
+<div class="card">
+<h2 id="settings">8. What to put in each setting</h2>
+<table>
+  <tr><th>Setting</th><th>What to enter</th></tr>
+  <tr><td>Network</td><td><b>testnet</b> to practice for free, <b>mainnet</b> for real. Your wallet must be on the same network.</td></tr>
+  <tr><td>Your wallet address</td><td>Your <b>Stacks</b> address from Xverse/Leather → <i>Receive</i>. <code>ST…</code> on testnet, <code>SP…</code> on mainnet. Mints and royalties go here. Never your secret words.</td></tr>
+  <tr><td>Storage</td><td>Own node, Pinata, or both (section 3).</td></tr>
+  <tr><td>IPFS node address (API)</td><td>Usually <code>http://127.0.0.1:5001</code>.</td></tr>
+  <tr><td>IPFS node gateway</td><td>Usually <code>http://127.0.0.1:8080</code>. Only used for previews in this app.</td></tr>
+  <tr><td>Pinata key</td><td>The JWT from section 5.</td></tr>
+  <tr><td>Link style / public gateway</td><td>Leave on <b>ipfs://</b> unless you've set up your own gateway address (section 6).</td></tr>
+  <tr><td>AI models</td><td>Picked from what Ollama has installed. A vision model (llava) and a writer model.</td></tr>
+  <tr><td>Royalty %</td><td>Your share of resales on marketplaces that honor royalties. 5–10% is common. Changeable later.</td></tr>
+</table>
+<p>Change any of these later in <a href="/settings">⚙ Settings</a>.</p>
+</div>
+
+<div class="card">
+<h2 id="use">9. Making a collection, step by step</h2>
+<ol>
+  <li><b>Collection and art:</b> type a name, choose all your images, press <i>Add images</i>. They're numbered by file
+    name, so name them in the order you want (<code>01.png, 02.png…</code>). Untick <i>Replace</i> to add more later.</li>
+  <li><b>Rarity and stories:</b> optionally give a theme ("guardians of a fallen sky-city") and canon (facts that must stay
+    true), then press <i>Write rarity + stories with AI</i>. Or use the manual option.</li>
+  <li><b>Review and edit:</b> press <i>Show my collection</i>, then <i>👁 Preview and edit</i> on any piece. You see it as a
+    wallet will: name, rarity, story, traits, plus the exact metadata. Fix anything and save.</li>
+  <li><b>Store on IPFS:</b> set the royalty and press <i>Store on IPFS + finish the contract</i>. This uploads the art and
+    metadata and puts the final address into your contract. Use <i>preview piece 1</i> to check.</li>
+  <li><b>Deploy and mint:</b> opens the wallet page (next section).</li>
+</ol>
+<p>Your collections are saved in <code>~/SonOfSatoshi-Minter/projects/&lt;Name&gt;/</code>: the images, the metadata, the
+  contract and a <code>state.json</code> with what you've deployed.</p>
+</div>
+
+<div class="card">
+<h2 id="mint">10. Deploy and mint</h2>
+<ol>
+  <li><b>Connect wallet.</b> Make sure the wallet is on the same network as the app (testnet/mainnet). The account you connect
+    becomes the collection's <b>owner</b>: only it can mint or change the collection later. Use an account you'll keep
+    (a Ledger account is ideal).</li>
+  <li><b>Deploy.</b> Approve it in the wallet. The page waits until the network confirms, usually 1–10 minutes.
+    Don't mint before that: the contract doesn't exist yet.</li>
+  <li><b>Mint.</b> Mints up to 200 per approval, sent to your address. A collection of 1,000 takes 5 approvals; the page
+    waits for each round to confirm, then offers the next. You can close it and come back; it reads the progress from the chain.</li>
+</ol>
+<p>Minted NFTs appear in Xverse/Leather after the network and Hiro (the indexer wallets use) catch up, usually minutes.</p>
+</div>
+
+<div class="card">
+<h2 id="after">11. After minting: edit, refresh, royalty, freeze</h2>
+<ul>
+  <li><b>Fix a story or picture:</b> edit it (step 3), press <i>Store on IPFS</i> again (new CID), then on the mint page press
+    <b>Re-point</b> and afterwards <b>Refresh wallets</b>.</li>
+  <li><b>Refresh wallets:</b> sends the standard "please re-read" notice (SIP-019). Use it when pictures show as blank
+    boxes, or after a re-point. Wallets can take up to an hour to update.</li>
+  <li><b>Moved your storage</b> (new node, different gateway)? Store again, then Re-point. That's why this contract can be
+    re-pointed: your NFTs never get stranded on a dead address.</li>
+  <li><b>Royalty:</b> change the % or who receives it.</li>
+  <li><b>Freeze:</b> locks the art and stories forever, for everyone including you. It proves to collectors that nothing
+    will change. Only do it once everything is final and your storage is solid.</li>
+</ul>
+<div class="note warn"><b>Keep the owner wallet safe.</b> Only the wallet that deployed the contract can re-point, refresh or
+  change it. Lose that wallet and your collection is stuck the way it is, forever.</div>
+</div>
+
+<div class="card">
+<h2 id="backup">12. Keep a backup</h2>
+<p>Copy <code>~/SonOfSatoshi-Minter/projects/</code> somewhere safe (an external drive, a NAS). With those files you can put
+  your art back on any IPFS node at the <b>exact same CIDs</b>, because IPFS addresses files by content. Your NFTs work again
+  without touching the blockchain. The folder is the master copy of your work.</p>
+</div>
+
+<div class="card">
+<h2 id="costs">13. Costs</h2>
+<p>This app is free. You pay the Stacks network's fees, set by your wallet and usually small (a fraction of an STX to a few
+  STX): one fee to deploy, one per mint round of up to 200, one per re-point / refresh / royalty change.</p>
+<p><b>Practice for free on testnet:</b> switch your wallet to Testnet, copy your <code>ST…</code> address, and request test STX
+  at <a href="https://explorer.hiro.so/sandbox/faucet?chain=testnet" target="_blank" rel="noopener">the Hiro faucet</a>.</p>
+</div>
+
+<div class="card">
+<h2 id="safety">14. Safety</h2>
+<ul>
+  <li>This app <b>never</b> asks for your secret words (seed phrase) or private key. If anything ever does, stop.</li>
+  <li>Every transaction opens in <b>your wallet</b>: read it before approving. The mint page shows the full contract code.</li>
+  <li>The app only answers on <code>127.0.0.1</code> (your own computer) and refuses requests from other websites.</li>
+  <li>Your Pinata key is stored only in <code>~/SonOfSatoshi-Minter/config.json</code>, readable only by you.</li>
+  <li>Don't expose your IPFS node's port 5001 to the internet (section 4).</li>
+</ul>
+</div>
+
+<div class="card">
+<h2 id="trouble">15. When something goes wrong</h2>
+<table>
+  <tr><th>What you see</th><th>What to do</th></tr>
+  <tr><td>"can't reach an IPFS node"</td><td>Is the node running? <code>docker ps</code> should list <i>ipfs</i>. Check the address in Settings.</td></tr>
+  <tr><td>Blank / gray boxes in the wallet</td><td>Give it an hour after minting. Then check <i>preview piece 1</i> loads. If it does, press <b>Refresh wallets</b>. If it doesn't, your files aren't reachable: see sections 4 and 6.</td></tr>
+  <tr><td>"Error fetching contract ABI" / mint fails right after deploy</td><td>The deploy hasn't confirmed yet. Wait; the page enables Mint when it's live.</td></tr>
+  <tr><td>Wallet shows the wrong network</td><td>Switch the wallet to match the app's network badge (top right).</td></tr>
+  <tr><td>"That's a testnet address…"</td><td>ST… addresses are testnet, SP… are mainnet. Match them to the network you chose.</td></tr>
+  <tr><td>AI stops with an error</td><td>Press the button again: it resumes where it stopped. Check <code>ollama ps</code>; a smaller model helps on small GPUs.</td></tr>
+  <tr><td>Pinata "HTTP 401/403"</td><td>The key is wrong or lacks the pinning permission. Make a new one.</td></tr>
+  <tr><td>Pinata "HTTP 413" or quota errors</td><td>Your plan's limit; upgrade, or use your own node.</td></tr>
+</table>
+</div>
+
+</main>
+</body></html>

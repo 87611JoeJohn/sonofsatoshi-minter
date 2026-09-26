@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.bak*
+*.log
+.env
+config.json
+projects/
+.ai-vision/
+.DS_Store
+release.sh

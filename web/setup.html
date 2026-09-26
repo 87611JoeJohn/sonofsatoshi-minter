@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SonOfSatoshi Minter — Setup</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1>SonOfSatoshi Minter</h1></a>
+  <nav><a href="/guide" target="_blank">📖 Guide</a></nav>
+</header>
+<main class="wizard">
+  <div class="dots" id="dots"></div>
+
+  <!-- 0 welcome -->
+  <section class="step card" data-step="0">
+    <h2>Welcome 👋</h2>
+    <p>This app turns a folder of your art into a finished NFT collection on <b>Stacks</b>, which settles on Bitcoin.
+      It numbers your pieces, gives each one a rarity and a story, stores everything on IPFS, and lets you deploy and mint
+      from <b>your own wallet</b>.</p>
+    <div class="note"><b>Your keys stay yours.</b> This app runs only on your computer. It never asks for your seed phrase
+      or private key. Every transaction is approved by you, inside your wallet.</div>
+    <p>Setup takes about 5 minutes. You'll need:</p>
+    <ul>
+      <li>A Stacks wallet: <b>Xverse</b> or <b>Leather</b> (browser extension). A Ledger works through either.</li>
+      <li>A place to store the art (next step explains): your own IPFS node, or a free Pinata account.</li>
+      <li>Optional: <b>Ollama</b> if you want the AI to write the stories.</li>
+    </ul>
+    <p class="sub">Not sure about something? The <a href="/guide" target="_blank">Guide</a> explains every part in plain words.</p>
+    <div class="nav"><span></span><button data-go="1">Let's start →</button></div>
+  </section>
+
+  <!-- 1 network -->
+  <section class="step card" data-step="1">
+    <h2>Practice or real?</h2>
+    <p class="sub">Start on <b>testnet</b>. It works exactly like the real thing but uses free test coins, so mistakes cost nothing.
+      Switch to mainnet in Settings when you're ready.</p>
+    <div class="choices" id="netChoices">
+      <div class="choice" data-net="testnet"><b>🧪 Testnet <span class="tag">start here</span></b><span>Free practice coins. Nothing is real.</span></div>
+      <div class="choice" data-net="mainnet"><b>🟠 Mainnet</b><span>The real network. Deploying and minting cost real STX (usually around 1–3 STX per collection).</span></div>
+    </div>
+    <div class="note" id="faucetNote">On testnet, get free test STX: switch your wallet to <b>Testnet</b>, then use the faucet at
+      <a href="https://explorer.hiro.so/sandbox/faucet?chain=testnet" target="_blank" rel="noopener">explorer.hiro.so → Sandbox → Faucet</a>.</div>
+    <div class="nav"><button class="ghost" data-go="0">← Back</button><button data-go="2">Next →</button></div>
+  </section>
+
+  <!-- 2 address -->
+  <section class="step card" data-step="2">
+    <h2>Your wallet address</h2>
+    <p class="sub">Your finished NFTs are minted to this address, and royalties are paid to it. It's a <b>public</b> address:
+      safe to share, like an account number.</p>
+    <label>Stacks address (<span id="addrPrefix">ST…</span>)</label>
+    <input id="owner" placeholder="ST… or SP…" autocomplete="off" spellcheck="false">
+    <div class="out" id="ownerOut"></div>
+    <details><summary>Where do I find it?</summary>
+      <p><b>Xverse:</b> tap <i>Receive</i> → copy the <b>Stacks</b> address (not the Bitcoin one).<br>
+      <b>Leather:</b> click <i>Receive</i> → <b>Stacks</b> → copy.<br>
+      Testnet addresses start with <code>ST</code>, mainnet with <code>SP</code>. Using a Ledger? Pick the Ledger account in your wallet first.</p>
+      <div class="note warn">Never type your 12/24 secret words anywhere in this app, or on any website. Nobody legitimate will ever ask.</div>
+    </details>
+    <div class="nav"><button class="ghost" data-go="1">← Back</button><button data-go="3" id="addrNext">Next →</button></div>
+  </section>
+
+  <!-- 3 storage -->
+  <section class="step card" data-step="3">
+    <h2>Where your art lives (IPFS)</h2>
+    <p class="sub">An NFT on the blockchain is a pointer; the picture and its story live on <b>IPFS</b>. If nobody keeps
+      your files online, your NFTs show up as blank boxes. <a href="/guide#ipfs" target="_blank">Read why →</a></p>
+    <div class="choices" id="storeChoices">
+      <div class="choice" data-store="node"><b>🏠 My own IPFS node <span class="tag">sovereign</span></b><span>A small program on a computer you own. You keep your art online; nobody can switch it off.</span></div>
+      <div class="choice" data-store="pinata"><b>☁️ Pinata</b><span>A company keeps it online for you. Easiest; has a free plan. Your art depends on them.</span></div>
+      <div class="choice" data-store="both"><b>🛡️ Both <span class="tag">safest</span></b><span>Your node plus Pinata as a backup copy.</span></div>
+    </div>
+    <div id="nodeBox">
+      <label>IPFS node address (API)</label>
+      <input id="ipfsApi" placeholder="http://127.0.0.1:5001">
+      <label>IPFS node gateway (for previews)</label>
+      <input id="ipfsGw" placeholder="http://127.0.0.1:8080">
+      <button class="ghost small" id="testNode">Test my node</button>
+      <div class="status"><i class="dot" id="nodeDot"></i><span id="nodeOut">not tested yet</span></div>
+      <p class="sub">No node yet? <a href="/guide#node" target="_blank">One command sets one up →</a></p>
+    </div>
+    <div id="pinataBox">
+      <label>Pinata API key (JWT) <span id="jwtSaved" class="tag" style="display:none">saved</span></label>
+      <input id="pinataJwt" type="password" placeholder="eyJhbGciOi…" autocomplete="off">
+      <button class="ghost small" id="testPinata">Test the key</button>
+      <div class="status"><i class="dot" id="pinDot"></i><span id="pinOut">not tested yet</span></div>
+      <p class="sub"><a href="/guide#pinata" target="_blank">How to get a Pinata key →</a> Stored only on this computer, in a file only you can read.</p>
+    </div>
+    <details style="margin-top:12px"><summary>How NFTs link to the art (advanced)</summary>
+      <div class="choices" id="linkChoices">
+        <div class="choice" data-link="ipfs"><b>ipfs:// links <span class="tag">recommended</span></b><span>Standard and portable: wallets use their own IPFS gateway. Works best when your files are on Pinata, or your node is reachable from the internet.</span></div>
+        <div class="choice" data-link="gateway"><b>My public gateway</b><span>Links go through your own web address (e.g. https://ipfs.yourdomain.com). Best when your node is at home behind a router.</span></div>
+      </div>
+      <div id="gwBox"><label>Your public gateway</label><input id="pubGw" placeholder="https://ipfs.yourdomain.com">
+        <button class="ghost small" id="testGw">Test it</button>
+        <div class="status"><i class="dot" id="gwDot"></i><span id="gwOut">not tested yet</span></div></div>
+    </details>
+    <div class="nav"><button class="ghost" data-go="2">← Back</button><button data-go="4" id="storeNext">Next →</button></div>
+  </section>
+
+  <!-- 4 AI -->
+  <section class="step card" data-step="4">
+    <h2>AI stories and rarity <span class="sub">(optional)</span></h2>
+    <p class="sub">With <b>Ollama</b> (free, runs on your own computer), the app looks at every picture, gives it traits and a
+      rarity tier, and writes its backstory. You review and edit everything before minting. Without it, you set traits yourself.</p>
+    <div class="status"><i class="dot" id="aiDot"></i><span id="aiOut">checking for Ollama…</span></div>
+    <label>Ollama address</label><input id="ollamaUrl" placeholder="http://127.0.0.1:11434">
+    <button class="ghost small" id="testAi">Check again</button>
+    <div class="chk"><input type="checkbox" id="aiOn"><label for="aiOn" style="margin:0">Use AI for stories and rarity</label></div>
+    <div class="row">
+      <div><label>Vision model (looks at the art)</label><select id="visionModel"></select></div>
+      <div><label>Writer model (writes the stories)</label><select id="writerModel"></select></div>
+    </div>
+    <div class="note" id="aiHelp">Need models? In a terminal: <code>ollama pull llava</code> and <code>ollama pull qwen2.5:14b</code>
+      (a GPU with ~10 GB of memory is comfortable; smaller models like <code>llama3.2</code> work on less).</div>
+    <div class="nav"><button class="ghost" data-go="3">← Back</button><button data-go="5">Next →</button></div>
+  </section>
+
+  <!-- 5 royalty + finish -->
+  <section class="step card" data-step="5">
+    <h2>Royalty and finish</h2>
+    <p class="sub">A royalty is the share of each resale that marketplaces pay back to you (for those that honor it).
+      You can change it per collection, and even after minting.</p>
+    <label>Default royalty %</label><input id="royalty" type="number" min="0" max="30" step="0.5" value="5">
+    <div class="note" id="summary"></div>
+    <div class="out" id="saveOut"></div>
+    <div class="nav"><button class="ghost" data-go="4">← Back</button><button id="finish">✓ Save and open the minter</button></div>
+  </section>
+</main>
+<script src="/static/setup.js"></script>
+</body></html>
