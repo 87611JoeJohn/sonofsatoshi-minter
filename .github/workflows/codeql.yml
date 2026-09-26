@@ -8,6 +8,8 @@ permissions:
   security-events: write
 jobs:
   analyze:
+    # GitHub's free code scanning is for public repositories; skip quietly while the repo is private
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     strategy:
       matrix: { language: [python, javascript-typescript] }
