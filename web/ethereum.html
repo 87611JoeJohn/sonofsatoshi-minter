@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mint on Ethereum / Base — SonOfSatoshi Minter</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1 id="title">Mint on Ethereum</h1></a>
+  <span class="badge" id="net">…</span>
+  <nav><a href="/" id="back">← Back to the collection</a><a href="/guide#ethereum" target="_blank">📖 Help</a></nav>
+</header>
+<main>
+  <div class="card" id="info">loading…</div>
+
+  <div class="card">
+    <h2><span class="n">1</span>Connect your wallet</h2>
+    <p class="sub">MetaMask, Rabby, Coinbase Wallet or any browser wallet. It pays and approves every step; this app never sees a key.
+      The page asks the wallet to switch to the right network (and adds it if the wallet doesn't know it yet).</p>
+    <div id="wallets"></div>
+    <div class="out" id="oWallet"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>Deploy the collection contract</h2>
+    <p class="sub">One contract holds the whole collection: its name, the max supply (the number of pieces, fixed forever), the links
+      and the royalty. The connected wallet becomes its owner.</p>
+    <div class="row">
+      <div><label>Symbol (short ticker)</label><input id="symbol" maxlength="10" spellcheck="false" autocomplete="off"></div>
+      <div><label>Royalty %</label><input id="royPct" type="number" min="0" max="30" step="0.5"></div>
+      <div><label>Royalty goes to <span class="sub">(blank = the connected wallet)</span></label><input id="royAddr" placeholder="0x…" spellcheck="false" autocomplete="off"></div>
+    </div>
+    <div class="note" id="deployCost">Connect a wallet to see the cost.</div>
+    <div class="chk mainnetBox" style="display:none"><input type="checkbox" id="iUnderstand1"><label for="iUnderstand1" style="margin:0">I understand this spends real ETH.</label></div>
+    <button id="deploy">🚀 Deploy</button>
+    <div class="out" id="oDeploy"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>Mint the pieces</h2>
+    <p class="sub">Each batch is one wallet approval. The contract numbers the pieces itself and refuses a batch that's already minted,
+      so closing the page or pressing twice can never mint extra: press Mint again and it carries on from where the chain is.</p>
+    <div class="row">
+      <div><label>Pieces per transaction</label><input id="per" type="number" min="1" max="300" value="100"></div>
+      <div><label>Mint to <span class="sub">(blank = the connected wallet)</span></label><input id="mintTo" placeholder="0x…" spellcheck="false" autocomplete="off"></div>
+    </div>
+    <div class="note" id="mintCost">—</div>
+    <div class="chk mainnetBox" style="display:none"><input type="checkbox" id="iUnderstand2"><label for="iUnderstand2" style="margin:0">I understand this spends real ETH and minting can't be undone.</label></div>
+    <button id="mint">🪙 Mint</button>
+    <div class="bar" id="mBar" style="display:none"><i></i></div>
+    <div class="out" id="oMint"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span>Manage</h2>
+    <p class="sub"><b>Re-point</b> after you stored an edited version (step 4 on the main page): one transaction moves every piece to the new
+      links and tells marketplaces to refresh. <b>Royalty</b> can be changed any time. <b>Freeze</b> makes the links permanent.</p>
+    <button class="ghost" id="repoint">↻ Re-point to the latest version</button>
+    <button class="ghost" id="setRoy">% Set the royalty above</button>
+    <div class="out" id="oManage"></div>
+    <details style="margin-top:12px"><summary>🔒 Freeze forever</summary>
+      <p class="sub">After freezing, nobody (you included) can change a link again. Do it only when everything is final. Type <b>FREEZE</b> to enable the button.</p>
+      <input id="freezeWord" placeholder="FREEZE" autocomplete="off" style="max-width:160px"> <button class="danger" id="freeze" disabled>Freeze the links</button>
+      <div class="out" id="oFreeze"></div>
+    </details>
+  </div>
+</main>
+<script type="module" src="/static/ethereum.js"></script>
+</body></html>

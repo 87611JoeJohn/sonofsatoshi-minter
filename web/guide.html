@@ -28,12 +28,13 @@
   <a href="#trouble">15. When something goes wrong</a>
   <a href="#ordinals">16. Bitcoin Ordinals (inscribe on Bitcoin itself)</a>
   <a href="#solana">17. Solana (Metaplex Core)</a>
+  <a href="#ethereum">18. Ethereum and Base</a>
 </div>
 
 <div class="card">
 <h2 id="what">1. What this app does</h2>
 <p>You bring a folder of art. The app turns it into a finished NFT collection on <b>Stacks</b> (a Bitcoin layer). It can also
-  inscribe it directly on Bitcoin (<a href="#ordinals">section 16</a>) or mint it on Solana (<a href="#solana">section 17</a>).</p>
+  inscribe it directly on Bitcoin (<a href="#ordinals">section 16</a>) mint it on Solana (<a href="#solana">section 17</a>), or on Ethereum and Base (<a href="#ethereum">section 18</a>).</p>
 <ol>
   <li><b>Numbers</b> your pieces 0001, 0002 …</li>
   <li>Gives each piece <b>traits, a rarity tier and a story</b>, written by an AI running on your own computer from what's
@@ -351,6 +352,46 @@ ollama pull qwen2.5:14b    # writes the stories (smaller computer? try llama3.2)
 <p class="sub">Developers: a local <code>solana-test-validator</code> works too (network "My own local validator"). Load Metaplex Core
   into it with <code>solana program dump -u m CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d mpl_core.so</code> and
   <code>solana-test-validator --bpf-program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d mpl_core.so</code>.</p>
+
+<h2 id="ethereum">18. Ethereum and Base</h2>
+<p>Choose <b>Ethereum / Base</b> on the first question of the setup (or in ⚙ Settings). Each collection gets <b>its own
+  ERC-721 contract</b>, which you deploy and own. <b>Base</b> is a layer built on Ethereum, run by Coinbase, with the same wallets and
+  addresses but fees of cents instead of dollars. OpenSea and the main wallets show both.</p>
+<h3>What you need</h3>
+<ul>
+  <li>A browser wallet: <b>MetaMask</b>, <b>Rabby</b>, Coinbase Wallet or any other. A Ledger works through them. There's nothing else to
+    set up: the page talks to the network through your wallet and asks it to switch to the right network (adding it if needed).</li>
+  <li>A place for the art on IPFS, exactly as for Stacks. ipfs:// links work on OpenSea and in wallets; use your public gateway if your
+    node is at home behind a router (see <a href="#links">section 6</a>).</li>
+  <li>Some ETH on the network you chose. Deploying uses about 1.7 million gas and each piece about 30 thousand. On <b>Base</b> a whole
+    collection usually costs well under a few dollars; on <b>Ethereum</b> the deploy alone can cost from a few to tens of dollars, depending
+    on how busy the network is. The page shows the exact estimate before each step.</li>
+</ul>
+<h3>The contract</h3>
+<ul>
+  <li><b>Fixed supply:</b> the number of pieces is set at deploy and can never grow.</li>
+  <li><b>Only you mint</b>, in numbered batches. Each batch says which number it starts at, so the contract refuses one that was already
+    minted: a page that closed, a double click or a replayed transaction can never mint extra pieces.</li>
+  <li><b>Links:</b> each piece's link is the base link + its number + ".json". You can re-point the base (one transaction for all pieces,
+    and marketplaces are told to refresh) until you <b>freeze</b> it, which is permanent.</li>
+  <li><b>Royalty</b> (ERC-2981): up to 30%, to any address, changeable any time. Marketplaces decide whether they pay it.</li>
+  <li>The code is <code>contracts/SonOfSatoshiCollection.sol</code> (OpenZeppelin 5.6.1, compiler 0.8.37, optimizer 200 runs, EVM cancun).
+    To show it as "verified" on Etherscan or Basescan: on your contract's page choose <i>Verify and Publish</i> →
+    <i>Solidity (Standard-Json-Input)</i>, compiler v0.8.37, and upload <code>contracts/SonOfSatoshiCollection.verify.json</code> from the
+    app's folder. Etherscan usually detects the constructor arguments by itself.</li>
+</ul>
+<h3>Minting, step by step</h3>
+<ol>
+  <li>Build and <b>Store</b> the collection on the main page, as usual.</li>
+  <li>Open <b>Go to mint</b> and <b>connect</b> your wallet.</li>
+  <li><b>Deploy:</b> pick a short symbol, the royalty % and who receives it. One approval. The connected wallet becomes the owner.</li>
+  <li><b>Mint:</b> choose how many pieces per transaction (100 on Ethereum, 150 on Base are comfortable) and who receives them. One approval
+    per batch; the page keeps going until every piece is out. If anything stops, press Mint again: it carries on from where the chain is.</li>
+</ol>
+<h3>Practice first</h3>
+<p>Choose <b>Base Sepolia</b> (or Sepolia) in the setup. Get free test ETH from a faucet (Coinbase's developer platform and Alchemy
+  both run one for Base Sepolia and Sepolia). Deploy and mint a few pieces end to end before using real ETH. Practice records are kept
+  apart from the real networks'.</p>
 </div>
 </main>
 </body></html>

@@ -1,7 +1,7 @@
 <p align="center"><img src="web/icon.svg" width="72" alt=""></p>
 <h1 align="center">SonOfSatoshi Minter</h1>
 <p align="center"><b>Your art. Your storage. Your wallet. Your collection on Bitcoin.</b><br>
-A sovereign NFT minter for Stacks, Bitcoin Ordinals and Solana that runs entirely on your own computer.</p>
+A sovereign NFT minter for Stacks, Bitcoin Ordinals, Solana, Ethereum and Base that runs entirely on your own computer.</p>
 
 <p align="center"><img src="docs/main.png" width="760" alt="The minter's main screen"></p>
 
@@ -13,13 +13,13 @@ Bring a folder of art. Get a finished NFT collection:
 2. **Traits, rarity and a story for every piece.** Your own AI ([Ollama](https://ollama.com), running locally) looks at each picture, picks traits, ranks rarity across 12 tiers (Mythic → Base) and writes a story that matches what's actually in it. No GPU? Set trait weights yourself.
 3. **Review and edit** every piece exactly as wallets will show it: name, story, traits, rarity and the raw metadata.
 4. **Stores it on IPFS:** your own node, [Pinata](https://pinata.cloud), or both.
-5. **Deploy and mint from your own wallet:** Xverse or Leather on Stacks (Ledger works; big collections mint in rounds of 200), Phantom, Solflare or Backpack on Solana.
+5. **Deploy and mint from your own wallet:** Xverse or Leather on Stacks (Ledger works; big collections mint in rounds of 200), Phantom, Solflare or Backpack on Solana, MetaMask, Rabby or any browser wallet on Ethereum and Base.
 6. **Keep control after minting:** re-point to new edits, ask wallets to refresh (SIP-019), change the royalty, or freeze the art forever.
 
 **It never asks for your seed phrase or private key.** Every transaction is approved by you, in your wallet.
 There's no account, no server of ours, no tracking, and no fee. You pay only normal network fees.
 
-## Stacks, Bitcoin Ordinals or Solana
+## Stacks, Bitcoin Ordinals, Solana, Ethereum or Base
 
 The first setup question asks where to mint:
 
@@ -35,6 +35,13 @@ The first setup question asks where to mint:
   before it's sent, so a closed page never loses track of a piece. After minting: re-point every piece (and the collection) to a
   new version, change the royalty, or lock the collection forever. Calls go through the app's own relay, so a paid RPC's key never
   reaches the browser. Verified end to end against the real Metaplex Core program on a local validator.
+- **Ethereum / Base:** your own ERC-721 contract per collection
+  ([contracts/SonOfSatoshiCollection.sol](contracts/SonOfSatoshiCollection.sol), OpenZeppelin 5.6.1, solc 0.8.37): fixed max
+  supply, owner-only minting in numbered batches (a batch names the number it starts at, so a retried or replayed transaction
+  can never mint extra), re-pointable links with an ERC-4906 refresh notice until you freeze them, ERC-2981 royalty (max 30%)
+  and an ERC-7572 collection card. Deploy and mint from MetaMask, Rabby or any browser wallet; the page talks to the chain only
+  through your wallet. Practice on Sepolia or Base Sepolia. The compiled contract is rebuilt byte for byte and tested against a
+  local chain in CI, and the whole flow was verified end to end in a browser against anvil.
 
 ## Why it exists
 

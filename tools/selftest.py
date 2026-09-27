@@ -106,6 +106,38 @@ srv.update_config({"sol_network": "mainnet"})
 check(not srv.sol_info(srv.load_config(), "Sol One")[1]["sol"], "devnet records never show up on mainnet")
 srv.update_config({"chain": "stacks", "sol_network": "devnet", "sol_rpc": ""})
 
+# Ethereum / Base
+check(srv.update_config({"chain": "ethereum", "eth_owner": "0x123"})[0] == 400, "a non-Ethereum mint-to address is refused")
+check(srv.update_config({"chain": "ethereum", "eth_network": "polygon"})[0] == 400, "unknown EVM networks are refused")
+srv.update_config({"chain": "ethereum", "eth_network": "base-sepolia", "link_style": "ipfs"})
+srv.do_upload({}, {"collection_name": "Eth One", "images": [{"data": png}] * 3})
+srv.do_generate({}, {"collection_name": "Eth One", "description": "Three embers."})
+srv._push = lambda cfg, base, name: ("bafyethcid", ["test"])
+r = srv.do_publish(srv.load_config(), {"collection_name": "Eth One", "royalty_pct": 4})
+srv._push = _real_push
+m1 = json.loads((srv.PROJECTS / "Eth_One" / "metadata" / "1.json").read_text())
+check(r[0] == 200 and m1["image"].startswith("ipfs://") and "sip" not in m1 and "properties" not in m1 and list(m1)[:3] == ["name", "description", "image"],
+      "Ethereum metadata is the plain ERC-721 layout")
+card = json.loads((srv.PROJECTS / "Eth_One" / "metadata" / "collection.json").read_text())
+check(card["name"] == "Eth One" and "properties" not in card, "the contract gets its collection card (contractURI)")
+ei = srv.eth_info(srv.load_config(), "Eth One")[1]
+check(ei["count"] == 3 and ei["base_uri"] == "ipfs://bafyethcid/metadata/" and ei["royalty_bps"] == 400, "mint page gets the base link, count and royalty")
+ca = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+check(srv.eth_save({"collection_name": "Eth One", "contract": "0xnope"})[0] == 400, "a bad contract address is not recorded")
+check(srv.eth_save({"collection_name": "Eth One", "deploy": {"from": ca, "predicted": ca, "nonce": -1}})[0] == 400, "a bad deploy record is refused")
+check(srv.eth_save({"collection_name": "Eth One", "pending": [{"tx": "0x12"}]})[0] == 400, "a bad transaction record is refused")
+srv.eth_save({"collection_name": "Eth One", "deploy": {"from": ca, "predicted": ca, "nonce": 0}})
+srv.eth_save({"collection_name": "Eth One", "contract": ca})
+check("deploy" not in srv.eth_info(srv.load_config(), "Eth One")[1]["eth"], "a recorded contract closes the deploy record")
+check(srv.eth_save({"collection_name": "Eth One", "contract": "0x" + "1" * 40})[0] == 409, "a recorded contract is never silently replaced")
+srv.update_config({"eth_network": "base"})
+check(not srv.eth_info(srv.load_config(), "Eth One")[1]["eth"], "practice-network records never show up on Base mainnet")
+art = json.loads((ROOT / "web" / "eth-contract.json").read_text())
+mb = [f for f in art["abi"] if f.get("name") == "mintBatch"]
+check(art["bytecode"].startswith("0x6") and mb and [i["name"] for i in mb[0]["inputs"]] == ["to", "count", "start"],
+      "the shipped contract mints in numbered batches (start guard)")
+srv.update_config({"chain": "stacks", "eth_network": "base-sepolia"})
+
 # HTTP guards
 t = threading.Thread(target=srv.ThreadingHTTPServer(("127.0.0.1", 18731), srv.H).serve_forever, daemon=True); t.start()
 def req(path, method="GET", headers=None, body=None):

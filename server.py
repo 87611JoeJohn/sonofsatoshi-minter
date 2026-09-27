@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SonOfSatoshi Minter — a sovereign NFT minter for Stacks, Bitcoin Ordinals and Solana.
+SonOfSatoshi Minter — a sovereign NFT minter for Stacks, Bitcoin Ordinals, Solana, Ethereum and Base.
 
 Drop in a folder of art and get a finished collection:
   1. images numbered 0001, 0002 …
@@ -8,7 +8,8 @@ Drop in a folder of art and get a finished collection:
      (or your own trait weights, no AI needed)
   3. SIP-016 metadata and a SIP-009 Clarity contract you can re-point, refresh and freeze later
   4. everything stored on IPFS: your own node, Pinata, or both
-  5. deploy + mint from your own wallet (Xverse / Leather on Stacks, Phantom / Solflare / Backpack on Solana).
+  5. deploy + mint from your own wallet (Xverse / Leather on Stacks, Phantom / Solflare / Backpack on Solana,
+     MetaMask / Rabby / any browser wallet on Ethereum and Base).
      This app never sees a private key.
 
 Pure Python standard library. Runs on your computer at http://127.0.0.1:8130 and nowhere else.
@@ -54,7 +55,7 @@ DEFAULT_CONFIG = {
     "royalty_pct": 5,
     "rarity_tiers": None,
     # ---- Bitcoin Ordinals ----
-    "chain": "stacks",                 # stacks | ordinals | solana
+    "chain": "stacks",                 # stacks | ordinals | solana | ethereum
     "btc_network": "testnet4",         # mainnet | testnet4 | signet | regtest
     "btc_backend": "esplora",          # esplora (mempool.space or your own) | rpc (your own Bitcoin Core)
     "esplora_url": "",                 # blank = mempool.space for the chosen network
@@ -69,6 +70,9 @@ DEFAULT_CONFIG = {
     "sol_network": "devnet",           # devnet | mainnet | localnet
     "sol_rpc": "",                     # blank = the network's free public RPC; paid ones (Helius, QuickNode…) are faster
     "sol_owner": "",                   # where minted pieces go; blank = the wallet that mints
+    # ---- Ethereum / Base (one ERC-721 contract per collection) ----
+    "eth_network": "base-sepolia",     # mainnet | sepolia | base | base-sepolia | localhost
+    "eth_owner": "",                   # where minted pieces go; blank = the wallet that deploys
 }
 
 # ---------------- config ----------------
@@ -111,6 +115,9 @@ def _sol_addr_ok(a):
     for c in a: n = n * 58 + _B58.index(c)
     pad = len(a) - len(a.lstrip("1"))
     return pad + (n.bit_length() + 7) // 8 == 32
+_ETH_NETS = ("mainnet", "sepolia", "base", "base-sepolia", "localhost")
+_ETH_ADDR = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_ETH_TX = re.compile(r"^0x[0-9a-fA-F]{64}$")
 _SOL_RPC = {"mainnet": "https://api.mainnet-beta.solana.com", "devnet": "https://api.devnet.solana.com", "localnet": "http://127.0.0.1:8899"}
 def sol_endpoint(cfg):
     return cfg.get("sol_rpc") or _SOL_RPC.get(cfg.get("sol_network"), _SOL_RPC["devnet"])
@@ -149,8 +156,8 @@ def update_config(body):
         if "setup_done" in body: cfg["setup_done"] = bool(body["setup_done"])
         # ---- Bitcoin Ordinals settings ----
         if "chain" in body:
-            if body["chain"] in ("stacks", "ordinals", "solana"): cfg["chain"] = body["chain"]
-            else: errs.append("chain must be stacks, ordinals or solana")
+            if body["chain"] in ("stacks", "ordinals", "solana", "ethereum"): cfg["chain"] = body["chain"]
+            else: errs.append("chain must be stacks, ordinals, solana or ethereum")
         if "btc_network" in body:
             if body["btc_network"] in _BTC_HRP: cfg["btc_network"] = body["btc_network"]
             else: errs.append("bitcoin network must be mainnet, testnet4, signet or regtest")
@@ -185,6 +192,14 @@ def update_config(body):
             v = str(body["sol_owner"]).strip()
             if v and not _sol_addr_ok(v): errs.append("that isn't a Solana address")
             else: cfg["sol_owner"] = v
+        # ---- Ethereum / Base settings ----
+        if "eth_network" in body:
+            if body["eth_network"] in _ETH_NETS: cfg["eth_network"] = body["eth_network"]
+            else: errs.append("network must be mainnet, sepolia, base, base-sepolia or localhost")
+        if "eth_owner" in body:
+            v = str(body["eth_owner"]).strip()
+            if v and not _ETH_ADDR.match(v): errs.append("that isn't an Ethereum address (0x followed by 40 characters)")
+            else: cfg["eth_owner"] = v
         if cfg.get("chain") == "ordinals" and cfg.get("btc_network") == "regtest" and cfg.get("btc_backend") != "rpc":
             errs.append("regtest needs your own Bitcoin Core node (data source: rpc)")
         a = cfg.get("owner_address", "")
@@ -864,17 +879,17 @@ def _push(cfg, base, name):
         cid = cid or pc
     return cid, notes
 
-def _sol_collection_json(cfg, base, name, cid1, metas):
-    """The collection's own card on Solana: name, description and the first piece as its picture."""
+def _collection_card(cfg, base, name, cid1, metas, sol):
+    """The collection's own card (Solana collection link, Ethereum contractURI): name, description, first piece as picture."""
     first = json.loads(metas[0].read_text())
     lore = ""
     try: lore = json.loads((base / "collection.json").read_text()).get("lore", "")
     except Exception: pass
     img = first.get("image", "")
-    (base / "metadata" / "collection.json").write_text(json.dumps({
-        "name": name, "description": (lore or first.get("description", ""))[:1000], "image": img,
-        "properties": {"files": [{"uri": img, "type": first.get("properties", {}).get("files", [{}])[0].get("type", "image/png")}],
-                       "category": "image"}}, indent=2))
+    card = {"name": name, "description": (lore or first.get("description", ""))[:1000], "image": img}
+    if sol: card["properties"] = {"files": [{"uri": img, "type": first.get("properties", {}).get("files", [{}])[0].get("type", "image/png")}],
+                                  "category": "image"}
+    (base / "metadata" / "collection.json").write_text(json.dumps(card, indent=2))
 
 def do_publish(cfg, body):
     """Two passes: 1) store to learn the images' CID, 2) write those links into the metadata and store again.
@@ -883,7 +898,7 @@ def do_publish(cfg, body):
     base = project_path(name)
     metas = sorted(f for f in (base / "metadata").glob("*.json") if f.stem.isdigit()) if (base / "metadata").exists() else []
     if not metas: return 400, {"error": "build the collection first (step 2 or Build)"}
-    sol = cfg.get("chain") == "solana"
+    sol = cfg.get("chain") == "solana"; eth = cfg.get("chain") == "ethereum"
     if len(metas) != len(list_images(base / "images")):
         return 400, {"error": "the number of images and metadata files differ — press Build again"}
     try:
@@ -897,10 +912,14 @@ def do_publish(cfg, body):
                 d["properties"] = {"files": [{"uri": d["image"], "type": _CT.get(Path(fname).suffix.lower(), "image/png")}], "category": "image"}
                 jf.write_text(json.dumps(d, indent=2)); continue
             order = ["name", "description", "image", "attributes"]
+            if eth:   # the OpenSea / ERC-721 metadata layout
+                d.pop("sip", None); d.pop("properties", None)
+                jf.write_text(json.dumps({**{k: d[k] for k in order if k in d}, **{k: v for k, v in d.items() if k not in order}}, indent=2))
+                continue
             # SIP-016: "sip": 16 first — without it Xverse shows a gray box instead of the art
             d = {"sip": 16, **{k: d[k] for k in order if k in d}, **{k: v for k, v in d.items() if k not in order + ["sip"]}}
             jf.write_text(json.dumps(d, indent=2))
-        if sol: _sol_collection_json(cfg, base, name, cid1, metas)
+        if sol or eth: _collection_card(cfg, base, name, cid1, metas, sol)
         cid, notes = _push(cfg, base, name)
     except Exception as e:
         return 502, {"error": f"storing failed: {e}"}
@@ -911,6 +930,14 @@ def do_publish(cfg, body):
         return 200, {"ok": True, "cid": cid, "base_uri": st["sol_base"] + "{id}.json", "stored_on": notes,
                      "preview": _link(cfg, cid, "images/" + list_images(base / "images")[0].name),
                      "redeploy_note": bool((st.get("sol_" + cfg.get("sol_network", "devnet")) or {}).get("assets"))}
+    if eth:
+        bps, _ = _royalty(cfg, body, _read_state(base))
+        st = _write_state(base, cid=cid, eth_base_uri=_link(cfg, cid, "metadata/"), stored_on=notes, published_count=len(metas),
+                          royalty_pct=bps / 100)
+        return 200, {"ok": True, "cid": cid, "base_uri": st["eth_base_uri"] + "{id}.json", "stored_on": notes,
+                     "preview": _link(dict(cfg, link_style="gateway", public_gateway=cfg.get("public_gateway") or "https://ipfs.io"), cid,
+                                      "images/" + list_images(base / "images")[0].name),
+                     "redeploy_note": bool((st.get("eth_" + cfg.get("eth_network", "base-sepolia")) or {}).get("contract"))}
     uri = _link(cfg, cid, "metadata/{id}.json")
     if len(uri) > 256: return 400, {"error": "the metadata address is too long for the contract — use ipfs:// links in Settings"}
     write_contract(cfg, base, name, body, base_uri=uri)
@@ -1224,7 +1251,51 @@ def sol_save(body):
         _write_state(base, **{key: sol})
     return 200, {"ok": True, "sol": sol}
 
-PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html", "/inscribe": "inscribe.html", "/solana": "solana.html",
+# ---------------- Ethereum / Base: records (the wallet talks to the chain itself) ----------------
+_ETH_LOCK = threading.Lock()
+
+def eth_info(cfg, name):
+    base = project_path(name)
+    if not (base / ".collection").exists(): return 404, {"error": "unknown collection"}
+    st = _read_state(base); count = len(list_images(base / "images"))
+    if not st.get("eth_base_uri"): return 400, {"error": "store the collection first (Publish), with Ethereum chosen in Settings"}
+    net = cfg.get("eth_network", "base-sepolia")
+    bps, _ = _royalty(cfg, {}, st)
+    return 200, {"collection": name, "count": count, "base_uri": st["eth_base_uri"], "stale": st.get("published_count") != count,
+                 "network": net, "owner": cfg.get("eth_owner", ""), "royalty_bps": bps, "eth": st.get("eth_" + net) or {}}
+
+def eth_save(body):
+    """Records the contract and the transactions the wallet sent, so a closed page never loses track of them."""
+    name = str(body.get("collection_name", "")).strip(); base = project_path(name)
+    if not (base / ".collection").exists(): return 404, {"error": "unknown collection"}
+    key = "eth_" + load_config().get("eth_network", "base-sepolia")    # testnet records never mix with mainnet ones
+    with _ETH_LOCK:
+        st = _read_state(base); e = st.get(key) or {}
+        c = body.get("contract")
+        if c is not None:
+            if not _ETH_ADDR.match(str(c)): return 400, {"error": "bad contract address"}
+            if e.get("contract") and e["contract"].lower() != str(c).lower() and not body.get("replace"):
+                return 409, {"error": "this collection already has a contract on this network"}
+            e["contract"] = c; e.pop("deploy", None)
+        if "deploy" in body:                             # a deploy in flight: who sent it, with which nonce, where it lands
+            d = body["deploy"]
+            if d is None: e.pop("deploy", None)
+            elif not (isinstance(d, dict) and _ETH_ADDR.match(str(d.get("from", ""))) and _ETH_ADDR.match(str(d.get("predicted", "")))
+                      and isinstance(d.get("nonce"), int) and d["nonce"] >= 0 and (not d.get("tx") or _ETH_TX.match(str(d["tx"])))):
+                return 400, {"error": "bad deploy record"}
+            else: e["deploy"] = {k: d[k] for k in ("from", "predicted", "nonce", "tx") if d.get(k) is not None}
+        if isinstance(body.get("pending"), list):
+            pend = []
+            for x in body["pending"][:200]:
+                if not (isinstance(x, dict) and _ETH_TX.match(str(x.get("tx", "")))): return 400, {"error": "bad pending record"}
+                pend.append({"tx": x["tx"], "kind": str(x.get("kind", ""))[:20], "note": str(x.get("note", ""))[:120]})
+            e["pending"] = pend
+        if "royalty_bps" in body: e["royalty_bps"] = max(0, min(3000, int(body["royalty_bps"])))
+        if body.get("frozen") is True: e["frozen"] = True
+        _write_state(base, **{key: e})
+    return 200, {"ok": True, "eth": e}
+
+PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html", "/inscribe": "inscribe.html", "/solana": "solana.html", "/ethereum": "ethereum.html",
          "/mint": "mint.html", "/settings": "setup.html"}
 STATIC = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json"}
 # the only files /static/ can ever serve: the app's own web/ folder, listed once at startup
@@ -1287,6 +1358,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/lore-status": return self._send(*do_lore_status((q.get("name") or [""])[0]))
         if p == "/api/mintinfo": return self._send(*mint_info(cfg, (q.get("name") or [""])[0]))
         if p == "/api/sol/info": return self._send(*sol_info(cfg, (q.get("name") or [""])[0]))
+        if p == "/api/eth/info": return self._send(*eth_info(cfg, (q.get("name") or [""])[0]))
         if p == "/api/img":
             name = (q.get("c") or [""])[0]
             try: tid = int((q.get("id") or ["0"])[0])
@@ -1332,6 +1404,7 @@ class H(BaseHTTPRequestHandler):
             if p == "/api/ord/collection-file": return self._send(*ord_collection_file(body))
             if p == "/api/sol/check": return self._send(*sol_check(cfg, body))
             if p == "/api/sol/save": return self._send(*sol_save(body))
+            if p == "/api/eth/save": return self._send(*eth_save(body))
         except Exception as e:
             return self._send(500, {"error": f"{type(e).__name__}: {e}"})
         return self._send(404, {"error": "not found"})

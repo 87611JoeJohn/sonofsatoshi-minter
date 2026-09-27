@@ -7,9 +7,9 @@ async function api(path, body) {
   return r.json();
 }
 let CFG = {}, STEP = '0';
-const S = { network: 'testnet', storage: 'node', link_style: 'ipfs', chain: 'stacks', btc_network: 'testnet4', btc_backend: 'esplora', sol_network: 'devnet' };
+const S = { network: 'testnet', storage: 'node', link_style: 'ipfs', chain: 'stacks', btc_network: 'testnet4', btc_backend: 'esplora', sol_network: 'devnet', eth_network: 'base-sepolia' };
 // the steps each chain walks through (Ordinals has no Stacks wallet, IPFS or royalty steps)
-const ORDER = { stacks: ['0', 'c', '1', '2', '3', '4', '5'], ordinals: ['0', 'c', 'b', '4', '5'], solana: ['0', 'c', 's', '3', '4', '5'] };
+const ORDER = { stacks: ['0', 'c', '1', '2', '3', '4', '5'], ordinals: ['0', 'c', 'b', '4', '5'], solana: ['0', 'c', 's', '3', '4', '5'], ethereum: ['0', 'c', 'e', '3', '4', '5'] };
 const order = () => ORDER[S.chain] || ORDER.stacks;
 function show(id) {
   if (!order().includes(id)) id = order()[0];
@@ -32,6 +32,12 @@ function setChain(v) {
   $('#gwBox').style.display = sol || S.link_style === 'gateway' ? '' : 'none';
 }
 const SOL58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+function setEthNet(v) { S.eth_network = v; pick('#ethNetChoices', 'ethnet', v); }
+function checkEthOwner() {
+  const a = $('#ethOwner').value.trim(), o = $('#ethOwnerOut'), ok = !a || /^0x[0-9a-fA-F]{40}$/.test(a);
+  o.textContent = a ? (ok ? '✓ looks right' : '✕ that isn\'t an Ethereum address (0x followed by 40 characters)') : ''; o.className = 'out ' + (ok ? 'good' : 'bad');
+  return ok;
+}
 function setSolNet(v) { S.sol_network = v; pick('#solNetChoices', 'solnet', v); }
 function checkSolOwner() {
   const a = $('#solOwner').value.trim(), o = $('#solOwnerOut');
@@ -133,7 +139,10 @@ async function testAi() {
 function summary() {
   const store = { node: 'your own IPFS node', pinata: 'Pinata', both: 'your IPFS node + Pinata' }[S.storage];
   const ai = ['AI stories', $('#aiOn').checked ? `on (${$('#visionModel').value} + ${$('#writerModel').value})` : 'off'];
-  const rows = S.chain === 'solana'
+  const EN = { mainnet: 'Ethereum mainnet', sepolia: 'Sepolia (practice)', base: 'Base', 'base-sepolia': 'Base Sepolia (practice)', localhost: 'your local test chain' };
+  const rows = S.chain === 'ethereum'
+    ? [['Minting on', EN[S.eth_network]], ['Mint to', $('#ethOwner').value.trim() || 'the wallet you deploy with'], ['Art stored on', store], ai]
+    : S.chain === 'solana'
     ? [['Minting on', 'Solana ' + S.sol_network + ' (Metaplex Core)'], ['Mint to', $('#solOwner').value.trim() || 'the wallet you mint with'],
        ['RPC', $('#solRpc').value.trim() || CFG.sol_rpc_set && S.sol_network === CFG.sol_network ? 'your own RPC' : 'the free public RPC'], ['Art stored on', store], ai]
     : S.chain === 'ordinals'
@@ -157,7 +166,8 @@ async function finish() {
     location.href = '/'; return;
   }
   if (S.chain === 'solana' && !checkSolOwner()) { show('s'); return; }
-  if (S.chain !== 'solana' && !checkAddr()) { show('2'); return; }
+  if (S.chain === 'ethereum' && !checkEthOwner()) { show('e'); return; }
+  if (S.chain === 'stacks' && !checkAddr()) { show('2'); return; }
   const body = { chain: S.chain,
     network: S.network, owner_address: $('#owner').value.trim().toUpperCase(), storage: S.storage,
     ipfs_api: $('#ipfsApi').value.trim() || 'http://127.0.0.1:5001', ipfs_gateway: $('#ipfsGw').value.trim() || 'http://127.0.0.1:8080',
@@ -172,6 +182,10 @@ async function finish() {
     if ($('#solRpc').value.trim()) body.sol_rpc = $('#solRpc').value.trim();
     else if (S.sol_network !== CFG.sol_network) body.sol_rpc = '';     // a saved RPC belongs to the old network
   }
+  if (S.chain === 'ethereum') {
+    delete body.network; delete body.owner_address;
+    Object.assign(body, { eth_network: S.eth_network, eth_owner: $('#ethOwner').value.trim() });
+  }
   const jwt = $('#pinataJwt').value.trim(); if (jwt) body.pinata_jwt = jwt;
   if (S.storage !== 'node' && !jwt && !CFG.pinata_jwt_set) { $('#saveOut').textContent = '✕ add your Pinata key (step 4), or choose "My own IPFS node"'; $('#saveOut').className = 'out bad'; return; }
   const r = await api('/api/config', body);
@@ -185,6 +199,7 @@ document.addEventListener('click', e => {
     const fwd = nav.dataset.nav === 'next';
     if (fwd && STEP === '2' && !checkAddr()) { $('#ownerOut').textContent ||= '✕ paste your Stacks address'; $('#ownerOut').className = 'out bad'; return; }
     if (fwd && STEP === 's' && !checkSolOwner()) return;
+    if (fwd && STEP === 'e' && !checkEthOwner()) return;
     if (fwd && STEP === 'b' && !checkBtcAddrs()) { $('#btcAddrOut').textContent ||= '✕ paste your ordinals and refund addresses'; $('#btcAddrOut').className = 'out bad'; return; }
     show(step(fwd ? 1 : -1)); return;
   }
@@ -192,6 +207,7 @@ document.addEventListener('click', e => {
   if (c && c.dataset.chain) setChain(c.dataset.chain);
   if (c && c.dataset.btcnet) setBtcNet(c.dataset.btcnet);
   if (c && c.dataset.solnet) setSolNet(c.dataset.solnet);
+  if (c && c.dataset.ethnet) setEthNet(c.dataset.ethnet);
   if (c && c.dataset.btcsrc) setBtcSrc(c.dataset.btcsrc);
   if (c && c.dataset.net) setNet(c.dataset.net);
   if (c && c.dataset.store) setStore(c.dataset.store);
@@ -199,7 +215,7 @@ document.addEventListener('click', e => {
 });
 $('#owner').addEventListener('input', checkAddr);
 $('#ordAddr').addEventListener('input', checkBtcAddrs); $('#refundAddr').addEventListener('input', checkBtcAddrs);
-$('#testBtc').onclick = testBtc; $('#testSol').onclick = testSol; $('#solOwner').addEventListener('input', checkSolOwner);
+$('#testBtc').onclick = testBtc; $('#testSol').onclick = testSol; $('#solOwner').addEventListener('input', checkSolOwner); $('#ethOwner').addEventListener('input', checkEthOwner);
 $('#testNode').onclick = testNode; $('#testPinata').onclick = testPinata; $('#testGw').onclick = testGw;
 $('#testAi').onclick = testAi; $('#finish').onclick = finish;
 
@@ -216,6 +232,7 @@ $('#testAi').onclick = testAi; $('#finish').onclick = finish;
   if (CFG.rpc_pass_set) $('#rpcSaved').style.display = '';
   $('#solOwner').value = CFG.sol_owner || ''; if (CFG.sol_rpc_set) $('#solRpcSaved').style.display = '';
   setSolNet(CFG.sol_network || 'devnet');
+  $('#ethOwner').value = CFG.eth_owner || ''; setEthNet(CFG.eth_network || 'base-sepolia');
   setChain(CFG.chain || 'stacks'); setBtcNet(CFG.btc_network || 'testnet4'); setBtcSrc(CFG.btc_backend || 'esplora');
   show(CFG.setup_done ? 'c' : '0');   // returning from Settings: skip the welcome
 })();

@@ -23,6 +23,20 @@ jobs:
       - run: bash tools/wallet-bundle/build.sh
       - run: bash tools/btc-bundle/build.sh
       - run: bash tools/sol-bundle/build.sh
+  contract:
+    # proves web/eth.js + web/eth-contract.json are what the pinned sources build, then tests the contract on a local chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: "22" }
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1
+        with: { version: v1.8.3 }
+      - run: bash tools/eth-bundle/build.sh
+      - run: |
+          anvil --silent &
+          sleep 3
+          node tools/eth-bundle/contract-test.mjs
   no-secrets:
     runs-on: ubuntu-latest
     steps:

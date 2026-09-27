@@ -24,7 +24,7 @@ function openProject(n) {
   $('#cname').value = n; syncMintLink(); loadReview();
   $('#cname').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-function syncMintLink() { $('#mintLink').href = ({ ordinals: '/inscribe?name=', solana: '/solana?name=' }[CFG.chain] || '/mint?name=') + encodeURIComponent(NAME()); }
+function syncMintLink() { $('#mintLink').href = ({ ordinals: '/inscribe?name=', solana: '/solana?name=', ethereum: '/ethereum?name=' }[CFG.chain] || '/mint?name=') + encodeURIComponent(NAME()); }
 
 // ---------- step 1: upload in chunks (big collections never hit one giant request) ----------
 const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
@@ -227,6 +227,19 @@ $('#cname').addEventListener('input', syncMintLink);
     c5.querySelector('h2').innerHTML = '<span class="n">5</span>Mint on Solana';
     c5.querySelector('.sub').textContent = 'Connect Phantom, Solflare or Backpack, create the collection with its royalty, then mint the pieces in batches.';
     $('#mintLink').textContent = '🟪 Go to mint on Solana →';
+  } else if (CFG.chain === 'ethereum') {
+    const EN = { mainnet: 'ETHEREUM · real ETH', base: 'BASE · real ETH', sepolia: 'sepolia · practice', 'base-sepolia': 'base sepolia · practice', localhost: 'local test chain' };
+    nb.textContent = EN[CFG.eth_network] || CFG.eth_network;
+    if (CFG.eth_network === 'mainnet' || CFG.eth_network === 'base') nb.classList.add('main');
+    const onBase = String(CFG.eth_network).startsWith('base');
+    $('#royAddr').closest('div').style.display = 'none';                      // set on the mint page, with the deploy
+    $('#pubBtn').textContent = '☁ Store on IPFS';
+    $('#pubBtn').closest('.card').querySelector('.sub').innerHTML = 'Uploads the art and stories to <b id="storeName">your storage</b> in the standard ERC-721 layout marketplaces read. ' +
+      'Run this again any time you edit something (then use <i>Re-point</i> on the mint page if you have already deployed).';
+    const c5 = $('#mintLink').closest('.card');
+    c5.querySelector('h2').innerHTML = '<span class="n">5</span>Deploy + mint on ' + (onBase ? 'Base' : 'Ethereum');
+    c5.querySelector('.sub').textContent = 'Connect MetaMask, Rabby or any browser wallet, deploy the collection contract, then mint the pieces in batches.';
+    $('#mintLink').textContent = (onBase ? '🔵 Go to mint on Base →' : '💠 Go to mint on Ethereum →');
   } else {
     nb.textContent = CFG.network === 'mainnet' ? 'MAINNET · real STX' : 'testnet · practice';
     if (CFG.network === 'mainnet') nb.classList.add('main');

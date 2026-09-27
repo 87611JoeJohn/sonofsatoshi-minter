@@ -1,0 +1,4 @@
+node_modules/
+eth.js
+eth-contract.json
+eth-verify.json

@@ -1,0 +1,45 @@
+// Tests the collection contract against a local chain: anvil &  node contract-test.mjs   (RPC_URL to use another one)
+
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { createPublicClient, createWalletClient, http } = require('viem');
+const { foundry } = require('viem/chains');
+const C = require('./eth-contract.json');
+const RPC = process.env.RPC_URL || 'http://127.0.0.1:8545';
+const pub = createPublicClient({ chain: foundry, transport: http(RPC) });
+const [owner, other, fan] = await pub.request({ method: 'eth_accounts' });
+const w = a => createWalletClient({ account: a, chain: foundry, transport: http(RPC) });
+let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; };
+const rd = (fn, args = []) => pub.readContract({ address: A, abi: C.abi, functionName: fn, args });
+const tx = async (who, fn, args) => { const h = await w(who).writeContract({ address: A, abi: C.abi, functionName: fn, args }); return pub.waitForTransactionReceipt({ hash: h }); };
+const fails_with = async (who, fn, args, re) => { try { await pub.simulateContract({ account: who, address: A, abi: C.abi, functionName: fn, args }); return false; } catch (e) { return re.test(e.message); } };
+const h = await w(owner).deployContract({ abi: C.abi, bytecode: C.bytecode, args: ['Test Lanterns', 'LANT', 10n, 'ipfs://bafyold/metadata/', owner, other, 750n] });
+const r = await pub.waitForTransactionReceipt({ hash: h }); const A = r.contractAddress;
+console.log('deploy gas', r.gasUsed);
+ok(await rd('name') === 'Test Lanterns' && await rd('maxSupply') === 10n && await rd('owner') === (await import('viem')).getAddress(owner), 'deployed with name, supply, owner');
+ok(await fails_with(other, 'mintBatch', [other, 1n, 1n], /OwnableUnauthorizedAccount/), 'only the owner can mint');
+ok(await fails_with(owner, 'mintBatch', [fan, 3n, 2n], /WrongStart/), 'a batch must start at the next number');
+let m = await tx(owner, 'mintBatch', [fan, 6n, 1n]); console.log('mint 6 gas', m.gasUsed);
+ok(await fails_with(owner, 'mintBatch', [fan, 6n, 1n], /WrongStart/), 'replaying the same batch mints nothing');
+ok(await fails_with(owner, 'mintBatch', [fan, 5n, 7n], /SoldOut/), 'cannot pass the max supply');
+ok(await fails_with(owner, 'mintBatch', [fan, 0n, 7n], /BadCount/), 'zero count refused');
+await tx(owner, 'mintBatch', [fan, 4n, 7n]);
+ok(await rd('totalMinted') === 10n && (await rd('ownerOf', [10n])).toLowerCase() === fan, 'minted all 10 to the fan');
+ok(await fails_with(owner, 'mintBatch', [fan, 1n, 11n], /SoldOut/), 'sold out after 10');
+ok(await rd('tokenURI', [3n]) === 'ipfs://bafyold/metadata/3.json', 'token link = base + id + .json');
+ok(await rd('contractURI') === 'ipfs://bafyold/metadata/collection.json', 'collection card link');
+const [rcv, amt] = await rd('royaltyInfo', [1n, 10000n]); ok(rcv.toLowerCase() === other && amt === 750n, 'royalty 7.5% to the receiver (ERC-2981)');
+ok(await rd('supportsInterface', ['0x80ac58cd']) && await rd('supportsInterface', ['0x2a55205a']) && await rd('supportsInterface', ['0x49064906']), 'ERC-721, ERC-2981 and ERC-4906 advertised');
+const s = await tx(owner, 'setBaseURI', ['ipfs://bafynew/metadata/']);
+ok(s.logs.some(l => l.topics[0] === '0x6bd5c950a8d8df17f772f5af37cb3655737899cbf903264b9795592da439661c'), 'setBaseURI emits BatchMetadataUpdate');
+ok(await rd('tokenURI', [3n]) === 'ipfs://bafynew/metadata/3.json', 're-point works');
+ok(await fails_with(other, 'setBaseURI', ['x'], /OwnableUnauthorizedAccount/), 'only owner re-points');
+ok(await fails_with(owner, 'setRoyalty', [owner, 3001n], /RoyaltyTooHigh/), 'royalty capped at 30%');
+await tx(owner, 'setRoyalty', [owner, 1500n]); const [r2, a2] = await rd('royaltyInfo', [1n, 10000n]); ok(r2.toLowerCase() === owner && a2 === 1500n, 'royalty changed to 15%');
+await tx(owner, 'setRoyalty', [owner, 0n]); ok((await rd('royaltyInfo', [1n, 10000n]))[1] === 0n, 'royalty can be switched off');
+await tx(owner, 'freezeMetadata', []);
+ok(await fails_with(owner, 'setBaseURI', ['ipfs://evil/'], /MetadataIsFrozen/), 'after freeze nobody can re-point (MetadataIsFrozen)');
+try { await rd('tokenURI', [99n]); ok(false, 'unminted id has no link'); } catch { ok(true, 'unminted id has no link'); }
+await tx(fan, 'transferFrom', [fan, other, 2n]); ok((await rd('ownerOf', [2n])).toLowerCase() === other, 'holders can transfer');
+ok(await fails_with(other, 'freezeMetadata', [], /OwnableUnauthorizedAccount/) && await fails_with(other, 'setRoyalty', [other, 1n], /OwnableUnauthorizedAccount/), 'only owner freezes and sets royalty');
+console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);

@@ -14,14 +14,14 @@
   <section class="step card" data-step="0">
     <h2>Welcome 👋</h2>
     <p>This app turns a folder of your art into a finished NFT collection on <b>Stacks</b> (which settles on Bitcoin),
-      directly on <b>Bitcoin</b> as Ordinals, or on <b>Solana</b>.
+      directly on <b>Bitcoin</b> as Ordinals, on <b>Solana</b>, or on <b>Ethereum</b> and <b>Base</b>.
       It numbers your pieces, gives each one a rarity and a story, stores everything on IPFS, and lets you deploy and mint
       from <b>your own wallet</b>.</p>
     <div class="note"><b>Your keys stay yours.</b> This app runs only on your computer. It never asks for your seed phrase
       or private key. Every transaction is approved by you, inside your wallet.</div>
     <p>Setup takes about 5 minutes. You'll need:</p>
     <ul>
-      <li>A wallet (browser extension): <b>Xverse</b> or <b>Leather</b> for Stacks and Ordinals; <b>Phantom</b>, <b>Solflare</b> or <b>Backpack</b> for Solana. A Ledger works through them.</li>
+      <li>A wallet (browser extension): <b>Xverse</b> or <b>Leather</b> for Stacks and Ordinals; <b>Phantom</b>, <b>Solflare</b> or <b>Backpack</b> for Solana; <b>MetaMask</b>, <b>Rabby</b> or any browser wallet for Ethereum and Base. A Ledger works through them.</li>
       <li>A place to store the art (next step explains): your own IPFS node, or a free Pinata account.</li>
       <li>Optional: <b>Ollama</b> if you want the AI to write the stories.</li>
     </ul>
@@ -35,6 +35,7 @@
     <div class="choices" id="chainChoices">
       <div class="choice" data-chain="stacks"><b>🟣 Stacks</b><span>A Bitcoin layer with smart contracts: royalties, re-pointing, freezing. The art lives on IPFS.</span></div>
       <div class="choice" data-chain="ordinals"><b>🟠 Bitcoin Ordinals</b><span>Inscribed directly on Bitcoin itself: the art lives on-chain forever. No IPFS, no contract, no royalties.</span></div>
+      <div class="choice" data-chain="ethereum"><b>💠 Ethereum / Base</b><span>Your own ERC-721 contract: royalties, re-pointing, freezing. Base is Ethereum's low-fee layer (cents instead of dollars). MetaMask, Rabby or any browser wallet. The art lives on IPFS.</span></div>
       <div class="choice" data-chain="solana"><b>🟪 Solana</b><span>Metaplex Core collections: cheap and fast, royalties, re-pointing, locking. The art lives on IPFS. Phantom, Solflare or Backpack.</span></div>
     </div>
     <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
@@ -87,6 +88,24 @@
     <div class="out" id="solOwnerOut"></div>
     <button class="ghost small" id="testSol">Test the connection</button>
     <div class="status"><i class="dot" id="solDot"></i><span id="solOut">not tested yet</span></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
+  </section>
+
+  <!-- ethereum -->
+  <section class="step card" data-step="e">
+    <h2>Ethereum / Base settings</h2>
+    <label>Network</label>
+    <div class="choices" id="ethNetChoices">
+      <div class="choice" data-ethnet="base-sepolia"><b>🧪 Base Sepolia <span class="tag">start here</span></b><span>Free test ETH. Practice for Base.</span></div>
+      <div class="choice" data-ethnet="sepolia"><b>🧪 Sepolia</b><span>Free test ETH. Practice for Ethereum.</span></div>
+      <div class="choice" data-ethnet="base"><b>🔵 Base</b><span>Real ETH, low fees: a whole collection usually costs well under a dollar or a few dollars.</span></div>
+      <div class="choice" data-ethnet="mainnet"><b>💠 Ethereum mainnet</b><span>Real ETH, the most expensive network: deploying alone can cost from a few to tens of dollars.</span></div>
+      <div class="choice" data-ethnet="localhost"><b>🛠 My own local test chain</b><span>For developers: anvil or hardhat at 127.0.0.1:8545.</span></div>
+    </div>
+    <label>Mint to <span class="sub">(optional, blank = the wallet you deploy with)</span></label>
+    <input id="ethOwner" placeholder="0x…" autocomplete="off" spellcheck="false">
+    <div class="out" id="ethOwnerOut"></div>
+    <p class="sub">There's nothing else to set up: the page talks to the network through your wallet, and asks it to switch to this network.</p>
     <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
   </section>
 
