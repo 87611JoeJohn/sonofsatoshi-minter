@@ -7,9 +7,9 @@ async function api(path, body) {
   return r.json();
 }
 let CFG = {}, STEP = '0';
-const S = { network: 'testnet', storage: 'node', link_style: 'ipfs', chain: 'stacks', btc_network: 'testnet4', btc_backend: 'esplora' };
+const S = { network: 'testnet', storage: 'node', link_style: 'ipfs', chain: 'stacks', btc_network: 'testnet4', btc_backend: 'esplora', sol_network: 'devnet' };
 // the steps each chain walks through (Ordinals has no Stacks wallet, IPFS or royalty steps)
-const ORDER = { stacks: ['0', 'c', '1', '2', '3', '4', '5'], ordinals: ['0', 'c', 'b', '4', '5'] };
+const ORDER = { stacks: ['0', 'c', '1', '2', '3', '4', '5'], ordinals: ['0', 'c', 'b', '4', '5'], solana: ['0', 'c', 's', '3', '4', '5'] };
 const order = () => ORDER[S.chain] || ORDER.stacks;
 function show(id) {
   if (!order().includes(id)) id = order()[0];
@@ -26,6 +26,23 @@ function setChain(v) {
   S.chain = v; pick('#chainChoices', 'chain', v);
   const ord = v === 'ordinals';
   $('#royaltyBox').style.display = ord ? 'none' : ''; $('#finishTitle').textContent = ord ? 'Finish' : 'Royalty and finish';
+  const sol = v === 'solana';                        // Solana links are always https: only the gateway choice is left
+  $('#linkChoices').style.display = sol ? 'none' : ''; $('#solLinkNote').style.display = sol ? '' : 'none';
+  $('#linkSummary').textContent = sol ? 'Your public gateway (optional)' : 'How NFTs link to the art (advanced)';
+  $('#gwBox').style.display = sol || S.link_style === 'gateway' ? '' : 'none';
+}
+const SOL58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+function setSolNet(v) { S.sol_network = v; pick('#solNetChoices', 'solnet', v); }
+function checkSolOwner() {
+  const a = $('#solOwner').value.trim(), o = $('#solOwnerOut');
+  const ok = !a || SOL58.test(a);
+  o.textContent = a ? (ok ? '✓ looks right' : '✕ that isn\'t a Solana address') : ''; o.className = 'out ' + (ok ? 'good' : 'bad');
+  return ok;
+}
+async function testSol() {
+  $('#solOut').textContent = 'testing…';
+  const r = await api('/api/sol/check', { sol_network: S.sol_network, sol_rpc: $('#solRpc').value.trim() });
+  dot('#solDot', !!r.ok, r.detail || r.error || 'no answer', '#solOut'); return !!r.ok;
 }
 function setBtcNet(v) { S.btc_network = v; pick('#btcNetChoices', 'btcnet', v); $('#ordPrefix').textContent = PREFIX[v] + 'p'; checkBtcAddrs(); }
 function setBtcSrc(v) { S.btc_backend = v; pick('#btcSrcChoices', 'btcsrc', v); $('#esploraBox').style.display = v === 'esplora' ? '' : 'none'; $('#rpcBox').style.display = v === 'rpc' ? '' : 'none'; }
@@ -59,7 +76,7 @@ function setStore(v) {
   $('#nodeBox').style.display = v === 'pinata' ? 'none' : '';
   $('#pinataBox').style.display = v === 'node' ? 'none' : '';
 }
-function setLink(v) { S.link_style = v; pick('#linkChoices', 'link', v); $('#gwBox').style.display = v === 'gateway' ? '' : 'none'; }
+function setLink(v) { S.link_style = v; pick('#linkChoices', 'link', v); $('#gwBox').style.display = v === 'gateway' || S.chain === 'solana' ? '' : 'none'; }
 
 function checkAddr() {
   const a = $('#owner').value.trim().toUpperCase(), o = $('#ownerOut');
@@ -116,7 +133,10 @@ async function testAi() {
 function summary() {
   const store = { node: 'your own IPFS node', pinata: 'Pinata', both: 'your IPFS node + Pinata' }[S.storage];
   const ai = ['AI stories', $('#aiOn').checked ? `on (${$('#visionModel').value} + ${$('#writerModel').value})` : 'off'];
-  const rows = S.chain === 'ordinals'
+  const rows = S.chain === 'solana'
+    ? [['Minting on', 'Solana ' + S.sol_network + ' (Metaplex Core)'], ['Mint to', $('#solOwner').value.trim() || 'the wallet you mint with'],
+       ['RPC', $('#solRpc').value.trim() || CFG.sol_rpc_set && S.sol_network === CFG.sol_network ? 'your own RPC' : 'the free public RPC'], ['Art stored on', store], ai]
+    : S.chain === 'ordinals'
     ? [['Minting on', 'Bitcoin Ordinals (' + S.btc_network + ')'], ['Inscriptions go to', $('#ordAddr').value.trim() || '— not set'],
        ['Refunds go to', $('#refundAddr').value.trim() || '— not set'], ['Chain data', S.btc_backend === 'rpc' ? 'your own Bitcoin node' : ($('#esploraUrl').value.trim() || 'mempool.space')], ai]
     : [['Network', S.network], ['Mint to', $('#owner').value.trim() || '— not set'], ['Art stored on', store], ai];
@@ -136,8 +156,9 @@ async function finish() {
     if (r.error) { $('#saveOut').textContent = '✕ ' + r.error; $('#saveOut').className = 'out bad'; return; }
     location.href = '/'; return;
   }
-  if (!checkAddr()) { show('2'); return; }
-  const body = { chain: 'stacks',
+  if (S.chain === 'solana' && !checkSolOwner()) { show('s'); return; }
+  if (S.chain !== 'solana' && !checkAddr()) { show('2'); return; }
+  const body = { chain: S.chain,
     network: S.network, owner_address: $('#owner').value.trim().toUpperCase(), storage: S.storage,
     ipfs_api: $('#ipfsApi').value.trim() || 'http://127.0.0.1:5001', ipfs_gateway: $('#ipfsGw').value.trim() || 'http://127.0.0.1:8080',
     link_style: S.link_style, public_gateway: $('#pubGw').value.trim(),
@@ -145,6 +166,12 @@ async function finish() {
     vision_model: $('#visionModel').value, writer_model: $('#writerModel').value,
     royalty_pct: +$('#royalty').value || 0, setup_done: true
   };
+  if (S.chain === 'solana') {
+    delete body.network; delete body.owner_address;
+    Object.assign(body, { sol_network: S.sol_network, sol_owner: $('#solOwner').value.trim() });
+    if ($('#solRpc').value.trim()) body.sol_rpc = $('#solRpc').value.trim();
+    else if (S.sol_network !== CFG.sol_network) body.sol_rpc = '';     // a saved RPC belongs to the old network
+  }
   const jwt = $('#pinataJwt').value.trim(); if (jwt) body.pinata_jwt = jwt;
   if (S.storage !== 'node' && !jwt && !CFG.pinata_jwt_set) { $('#saveOut').textContent = '✕ add your Pinata key (step 4), or choose "My own IPFS node"'; $('#saveOut').className = 'out bad'; return; }
   const r = await api('/api/config', body);
@@ -157,12 +184,14 @@ document.addEventListener('click', e => {
   if (nav) {
     const fwd = nav.dataset.nav === 'next';
     if (fwd && STEP === '2' && !checkAddr()) { $('#ownerOut').textContent ||= '✕ paste your Stacks address'; $('#ownerOut').className = 'out bad'; return; }
+    if (fwd && STEP === 's' && !checkSolOwner()) return;
     if (fwd && STEP === 'b' && !checkBtcAddrs()) { $('#btcAddrOut').textContent ||= '✕ paste your ordinals and refund addresses'; $('#btcAddrOut').className = 'out bad'; return; }
     show(step(fwd ? 1 : -1)); return;
   }
   const c = e.target.closest('.choice');
   if (c && c.dataset.chain) setChain(c.dataset.chain);
   if (c && c.dataset.btcnet) setBtcNet(c.dataset.btcnet);
+  if (c && c.dataset.solnet) setSolNet(c.dataset.solnet);
   if (c && c.dataset.btcsrc) setBtcSrc(c.dataset.btcsrc);
   if (c && c.dataset.net) setNet(c.dataset.net);
   if (c && c.dataset.store) setStore(c.dataset.store);
@@ -170,7 +199,7 @@ document.addEventListener('click', e => {
 });
 $('#owner').addEventListener('input', checkAddr);
 $('#ordAddr').addEventListener('input', checkBtcAddrs); $('#refundAddr').addEventListener('input', checkBtcAddrs);
-$('#testBtc').onclick = testBtc;
+$('#testBtc').onclick = testBtc; $('#testSol').onclick = testSol; $('#solOwner').addEventListener('input', checkSolOwner);
 $('#testNode').onclick = testNode; $('#testPinata').onclick = testPinata; $('#testGw').onclick = testGw;
 $('#testAi').onclick = testAi; $('#finish').onclick = finish;
 
@@ -185,6 +214,8 @@ $('#testAi').onclick = testAi; $('#finish').onclick = finish;
   $('#ordAddr').value = CFG.ord_address || ''; $('#refundAddr').value = CFG.refund_address || '';
   $('#esploraUrl').value = CFG.esplora_url || ''; $('#rpcUrl').value = CFG.rpc_url || ''; $('#rpcUser').value = CFG.rpc_user || '';
   if (CFG.rpc_pass_set) $('#rpcSaved').style.display = '';
+  $('#solOwner').value = CFG.sol_owner || ''; if (CFG.sol_rpc_set) $('#solRpcSaved').style.display = '';
+  setSolNet(CFG.sol_network || 'devnet');
   setChain(CFG.chain || 'stacks'); setBtcNet(CFG.btc_network || 'testnet4'); setBtcSrc(CFG.btc_backend || 'esplora');
   show(CFG.setup_done ? 'c' : '0');   // returning from Settings: skip the welcome
 })();

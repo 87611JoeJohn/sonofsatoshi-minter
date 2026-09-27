@@ -1,7 +1,7 @@
 <p align="center"><img src="web/icon.svg" width="72" alt=""></p>
 <h1 align="center">SonOfSatoshi Minter</h1>
 <p align="center"><b>Your art. Your storage. Your wallet. Your collection on Bitcoin.</b><br>
-A sovereign NFT minter for Stacks that runs entirely on your own computer.</p>
+A sovereign NFT minter for Stacks, Bitcoin Ordinals and Solana that runs entirely on your own computer.</p>
 
 <p align="center"><img src="docs/main.png" width="760" alt="The minter's main screen"></p>
 
@@ -13,13 +13,13 @@ Bring a folder of art. Get a finished NFT collection:
 2. **Traits, rarity and a story for every piece.** Your own AI ([Ollama](https://ollama.com), running locally) looks at each picture, picks traits, ranks rarity across 12 tiers (Mythic → Base) and writes a story that matches what's actually in it. No GPU? Set trait weights yourself.
 3. **Review and edit** every piece exactly as wallets will show it: name, story, traits, rarity and the raw metadata.
 4. **Stores it on IPFS:** your own node, [Pinata](https://pinata.cloud), or both.
-5. **Deploy and mint from your own wallet:** Xverse or Leather (Ledger works). Big collections mint in rounds of 200.
+5. **Deploy and mint from your own wallet:** Xverse or Leather on Stacks (Ledger works; big collections mint in rounds of 200), Phantom, Solflare or Backpack on Solana.
 6. **Keep control after minting:** re-point to new edits, ask wallets to refresh (SIP-019), change the royalty, or freeze the art forever.
 
 **It never asks for your seed phrase or private key.** Every transaction is approved by you, in your wallet.
 There's no account, no server of ours, no tracking, and no fee. You pay only normal network fees.
 
-## Stacks or Bitcoin Ordinals
+## Stacks, Bitcoin Ordinals or Solana
 
 The first setup question asks where to mint:
 
@@ -29,6 +29,12 @@ The first setup question asks where to mint:
   amount** to pay from any wallet, then commits and reveals the batch and sends each inscription to your Ordinals address.
   The batch's temporary key is saved locally before you pay, so funds can always be recovered. Works with mempool.space or your
   own Bitcoin Core node, and makes the collection file marketplaces ask for. Verified end to end on regtest against `ord`.
+- **Solana:** a [Metaplex Core](https://developers.metaplex.com/core) collection with the Royalties plugin; every piece is a Core
+  asset inside it; the art lives on IPFS (https links, the way Solana wallets read them). Connect Phantom, Solflare or Backpack,
+  create the collection, then mint in batches: the wallet approves a whole batch at once, and every signed transaction is saved
+  before it's sent, so a closed page never loses track of a piece. After minting: re-point every piece (and the collection) to a
+  new version, change the royalty, or lock the collection forever. Calls go through the app's own relay, so a paid RPC's key never
+  reaches the browser. Verified end to end against the real Metaplex Core program on a local validator.
 
 ## Why it exists
 

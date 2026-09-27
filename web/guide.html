@@ -27,11 +27,13 @@
   <a href="#safety">14. Safety</a>
   <a href="#trouble">15. When something goes wrong</a>
   <a href="#ordinals">16. Bitcoin Ordinals (inscribe on Bitcoin itself)</a>
+  <a href="#solana">17. Solana (Metaplex Core)</a>
 </div>
 
 <div class="card">
 <h2 id="what">1. What this app does</h2>
-<p>You bring a folder of art. The app turns it into a finished NFT collection on <b>Stacks</b> (a Bitcoin layer):</p>
+<p>You bring a folder of art. The app turns it into a finished NFT collection on <b>Stacks</b> (a Bitcoin layer). It can also
+  inscribe it directly on Bitcoin (<a href="#ordinals">section 16</a>) or mint it on Solana (<a href="#solana">section 17</a>).</p>
 <ol>
   <li><b>Numbers</b> your pieces 0001, 0002 …</li>
   <li>Gives each piece <b>traits, a rarity tier and a story</b>, written by an AI running on your own computer from what's
@@ -307,6 +309,48 @@ ollama pull qwen2.5:14b    # writes the stories (smaller computer? try llama3.2)
 <p>Choose <b>Testnet4</b> in the setup, switch Xverse to Testnet4, and get free test coins from a testnet4 faucet
   (for example <a href="https://mempool.space/testnet4/faucet" target="_blank" rel="noopener">mempool.space's</a>). Inscribe a couple of
   small pieces end to end before spending real bitcoin.</p>
+
+<h2 id="solana">17. Solana (Metaplex Core)</h2>
+<p>Choose <b>Solana</b> on the first question of the setup (or in ⚙ Settings). Your collection becomes a
+  <b>Metaplex Core</b> collection, the current standard on Solana: one collection account holds the name, the picture and the
+  royalty rule, and every piece is a Core asset inside it. Magic Eden, Tensor and the main wallets show Core collections.</p>
+<h3>What you need</h3>
+<ul>
+  <li>A Solana wallet as a browser extension: <b>Phantom</b>, <b>Solflare</b> or <b>Backpack</b>. A Ledger works through them.</li>
+  <li>A place for the art on IPFS, exactly as for Stacks (your node, Pinata, or both). Solana wallets need <b>https</b> links, so
+    the links go through your public gateway if you set one, otherwise through <code>ipfs.io</code>.</li>
+  <li>Some SOL. Each piece costs about <b>0.004 SOL</b>: mostly a deposit (rent) that keeps its account on Solana, plus Metaplex's
+    0.0015 SOL creation fee and a tiny network fee. The collection itself costs about 0.003 SOL once. The mint page shows the
+    exact estimate before you start.</li>
+  <li>Optional: your own <b>RPC address</b>. The free public ones are slow and rate-limited; for a big mainnet collection a free
+    account at an RPC provider or your own node is smoother. It stays on your computer (the page talks only to the app, and the
+    app passes on just the calls minting needs).</li>
+</ul>
+<h3>Minting, step by step</h3>
+<ol>
+  <li>Build and <b>Store</b> the collection on the main page, as usual.</li>
+  <li>Open <b>Go to mint on Solana</b> and <b>connect</b> your wallet.</li>
+  <li><b>Create the collection:</b> set the royalty % and who receives it (blank = the connected wallet). One approval.</li>
+  <li><b>Mint:</b> choose the range and how many pieces per approval (24 is comfortable). Your wallet approves a whole batch in one
+    prompt; about three pieces fit in each transaction. Every signed transaction is saved before it's sent: if the page closes,
+    reopen it and the app checks what landed, records it, and skips those pieces next time. Nothing is ever minted twice.</li>
+</ol>
+<h3>After minting</h3>
+<ul>
+  <li><b>Re-point:</b> edited a story or a picture? Store again on the main page, then press <b>Re-point</b>: the collection and
+    every minted piece switch to the new links (the list shows which pieces still point at an older version).</li>
+  <li><b>Royalty:</b> change the % or the receiver any time.</li>
+  <li><b>Lock forever:</b> adds Metaplex's ImmutableMetadata to the collection. After that nobody, you included, can change a name or
+    link of the collection or any piece in it. The royalty can still change.</li>
+</ul>
+<h3>Practice first</h3>
+<p>Choose <b>Devnet</b> in the setup, and switch your wallet to Devnet too (in Phantom: turn on testnet mode in its developer
+  settings and pick Solana Devnet; Solflare and Backpack have the same switch). Get free devnet SOL with the <b>Get 2 free test SOL</b> button on the mint page, or at
+  <a href="https://faucet.solana.com" target="_blank" rel="noopener">faucet.solana.com</a>. Mint a few pieces end to end before
+  using real SOL. Devnet and mainnet records are kept apart, so practice never mixes with the real collection.</p>
+<p class="sub">Developers: a local <code>solana-test-validator</code> works too (network "My own local validator"). Load Metaplex Core
+  into it with <code>solana program dump -u m CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d mpl_core.so</code> and
+  <code>solana-test-validator --bpf-program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d mpl_core.so</code>.</p>
 </div>
 </main>
 </body></html>

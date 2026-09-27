@@ -13,14 +13,15 @@
   <!-- 0 welcome -->
   <section class="step card" data-step="0">
     <h2>Welcome 👋</h2>
-    <p>This app turns a folder of your art into a finished NFT collection on <b>Stacks</b>, which settles on Bitcoin.
+    <p>This app turns a folder of your art into a finished NFT collection on <b>Stacks</b> (which settles on Bitcoin),
+      directly on <b>Bitcoin</b> as Ordinals, or on <b>Solana</b>.
       It numbers your pieces, gives each one a rarity and a story, stores everything on IPFS, and lets you deploy and mint
       from <b>your own wallet</b>.</p>
     <div class="note"><b>Your keys stay yours.</b> This app runs only on your computer. It never asks for your seed phrase
       or private key. Every transaction is approved by you, inside your wallet.</div>
     <p>Setup takes about 5 minutes. You'll need:</p>
     <ul>
-      <li>A Stacks wallet: <b>Xverse</b> or <b>Leather</b> (browser extension). A Ledger works through either.</li>
+      <li>A wallet (browser extension): <b>Xverse</b> or <b>Leather</b> for Stacks and Ordinals; <b>Phantom</b>, <b>Solflare</b> or <b>Backpack</b> for Solana. A Ledger works through them.</li>
       <li>A place to store the art (next step explains): your own IPFS node, or a free Pinata account.</li>
       <li>Optional: <b>Ollama</b> if you want the AI to write the stories.</li>
     </ul>
@@ -34,6 +35,7 @@
     <div class="choices" id="chainChoices">
       <div class="choice" data-chain="stacks"><b>🟣 Stacks</b><span>A Bitcoin layer with smart contracts: royalties, re-pointing, freezing. The art lives on IPFS.</span></div>
       <div class="choice" data-chain="ordinals"><b>🟠 Bitcoin Ordinals</b><span>Inscribed directly on Bitcoin itself: the art lives on-chain forever. No IPFS, no contract, no royalties.</span></div>
+      <div class="choice" data-chain="solana"><b>🟪 Solana</b><span>Metaplex Core collections: cheap and fast, royalties, re-pointing, locking. The art lives on IPFS. Phantom, Solflare or Backpack.</span></div>
     </div>
     <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
   </section>
@@ -64,6 +66,27 @@
       <div><label>RPC user</label><input id="rpcUser" autocomplete="off"></div><div><label>RPC password <span id="rpcSaved" class="tag" style="display:none">saved</span></label><input id="rpcPass" type="password" autocomplete="off"></div></div></div>
     <button class="ghost small" id="testBtc">Test the connection</button>
     <div class="status"><i class="dot" id="btcDot"></i><span id="btcOut">not tested yet</span></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
+  </section>
+
+  <!-- solana -->
+  <section class="step card" data-step="s">
+    <h2>Solana settings</h2>
+    <label>Network</label>
+    <div class="choices" id="solNetChoices">
+      <div class="choice" data-solnet="devnet"><b>🧪 Devnet <span class="tag">start here</span></b><span>Free test SOL. In your wallet, turn on testnet mode and pick Devnet.</span></div>
+      <div class="choice" data-solnet="mainnet"><b>🟪 Mainnet</b><span>Real SOL. Each piece costs about 0.004 SOL (mostly a deposit that keeps it on Solana).</span></div>
+      <div class="choice" data-solnet="localnet"><b>🛠 My own local validator</b><span>For developers: solana-test-validator on this computer with Metaplex Core loaded.</span></div>
+    </div>
+    <label>Solana RPC address <span id="solRpcSaved" class="tag" style="display:none">saved</span> <span class="sub">(optional)</span></label>
+    <input id="solRpc" type="password" placeholder="blank = the free public RPC for this network" autocomplete="off" spellcheck="false">
+    <p class="sub">The free public RPCs are slow and limited. For a big mainnet collection, a free account at an RPC provider (Helius, QuickNode, Triton…) or your own node is smoother.
+      The address is kept on this computer only (it often has a key in it) and never sent to the page.</p>
+    <label>Mint to <span class="sub">(optional, blank = the wallet you mint with)</span></label>
+    <input id="solOwner" placeholder="Solana address" autocomplete="off" spellcheck="false">
+    <div class="out" id="solOwnerOut"></div>
+    <button class="ghost small" id="testSol">Test the connection</button>
+    <div class="status"><i class="dot" id="solDot"></i><span id="solOut">not tested yet</span></div>
     <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
   </section>
 
@@ -125,7 +148,8 @@
       <div class="status"><i class="dot" id="pinDot"></i><span id="pinOut">not tested yet</span></div>
       <p class="sub"><a href="/guide#pinata" target="_blank">How to get a Pinata key →</a> Stored only on this computer, in a file only you can read.</p>
     </div>
-    <details style="margin-top:12px" id="linkDetails"><summary>How NFTs link to the art (advanced)</summary>
+    <details style="margin-top:12px" id="linkDetails"><summary id="linkSummary">How NFTs link to the art (advanced)</summary>
+      <p class="sub" id="solLinkNote" style="display:none">Solana wallets need https links. They go through your public gateway if you have one, otherwise through ipfs.io.</p>
       <div class="choices" id="linkChoices">
         <div class="choice" data-link="ipfs"><b>ipfs:// links <span class="tag">recommended</span></b><span>Standard and portable: wallets use their own IPFS gateway. Works best when your files are on Pinata, or your node is reachable from the internet.</span></div>
         <div class="choice" data-link="gateway"><b>My public gateway</b><span>Links go through your own web address (e.g. https://ipfs.yourdomain.com). Best when your node is at home behind a router.</span></div>

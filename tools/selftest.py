@@ -72,6 +72,40 @@ except RuntimeError: bad2 = True
 check(bad2, "broadcast only accepts a raw transaction")
 srv.update_config({"chain": "stacks"})
 
+# Solana
+check(srv._sol_addr_ok("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d") and srv._sol_addr_ok("11111111111111111111111111111111"), "Solana addresses accepted")
+check(not srv._sol_addr_ok("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7O") and not srv._sol_addr_ok("1111111111111111111111111111111"),
+      "non-base58 or short Solana addresses refused")
+check(srv.update_config({"chain": "solana", "sol_owner": "0xdeadbeef"})[0] == 400, "a non-Solana mint-to address is refused")
+srv.update_config({"chain": "solana", "sol_network": "mainnet", "sol_rpc": "https://rpc.example/?api-key=sekrit"})
+pc = srv.public_config(srv.load_config())
+check("sol_rpc" not in pc and pc.get("sol_rpc_set") and "sekrit" not in json.dumps(pc), "a paid Solana RPC link (with its key) never reaches the browser")
+check(srv.sol_relay(srv.load_config(), b'{"jsonrpc":"2.0","id":1,"method":"getProgramAccounts2"}')[0] == 403, "the RPC relay only passes the calls the mint page needs")
+check(srv.sol_relay(srv.load_config(), b'[{"jsonrpc":"2.0","id":1,"method":"getBalance"},{"method":"minimumLedgerSlot"}]')[0] == 403, "a batch with one disallowed call is refused whole")
+check(srv.sol_relay(srv.load_config(), b'{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":[]}')[0] == 403, "no airdrop calls on mainnet")
+check(srv.sol_check(srv.load_config(), {"sol_network": "devnet", "sol_rpc": "file:///etc/passwd"})[0] == 400, "the Solana RPC must be http(s)")
+srv.update_config({"sol_network": "devnet", "sol_rpc": "", "public_gateway": ""})
+srv.do_upload({}, {"collection_name": "Sol One", "images": [{"data": png}] * 3})
+srv.do_generate({}, {"collection_name": "Sol One", "description": "Three sparks."})
+_real_push = srv._push; srv._push = lambda cfg, base, name: ("bafytestcid", ["test"])
+r = srv.do_publish(srv.load_config(), {"collection_name": "Sol One", "royalty_pct": 6})
+srv._push = _real_push
+m1 = json.loads((srv.PROJECTS / "Sol_One" / "metadata" / "1.json").read_text())
+check(r[0] == 200 and m1["image"].startswith("https://ipfs.io/ipfs/") and m1["properties"]["files"][0]["type"] == "image/png" and "sip" not in m1,
+      "Solana metadata uses https links and the Metaplex file list")
+check((srv.PROJECTS / "Sol_One" / "metadata" / "collection.json").exists(), "the collection gets its own Solana card")
+info = srv.sol_info(srv.load_config(), "Sol One")[1]
+check(len(info["pieces"]) == 3 and info["royalty_bps"] == 600 and info["pieces"][2]["uri"].endswith("/metadata/3.json"), "mint page gets every piece's link and the royalty")
+good = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+check(srv.sol_save({"collection_name": "Sol One", "collection": "not-an-address"})[0] == 400, "a bad collection address is not recorded")
+srv.sol_save({"collection_name": "Sol One", "collection": good})
+check(srv.sol_save({"collection_name": "Sol One", "collection": "11111111111111111111111111111111"})[0] == 409, "a recorded collection is never silently replaced")
+check(srv.sol_save({"collection_name": "Sol One", "assets": {"1": "../../x"}})[0] == 400, "bad asset records are refused")
+check(srv.sol_save({"collection_name": "Sol One", "pending": [{"sig": "x", "lastValid": 1}]})[0] == 400, "bad pending records are refused")
+srv.update_config({"sol_network": "mainnet"})
+check(not srv.sol_info(srv.load_config(), "Sol One")[1]["sol"], "devnet records never show up on mainnet")
+srv.update_config({"chain": "stacks", "sol_network": "devnet", "sol_rpc": ""})
+
 # HTTP guards
 t = threading.Thread(target=srv.ThreadingHTTPServer(("127.0.0.1", 18731), srv.H).serve_forever, daemon=True); t.start()
 def req(path, method="GET", headers=None, body=None):
@@ -85,4 +119,6 @@ check(req("/api/config", "POST", {"Content-Type": "application/json", "X-SOS-Min
 check(req("/api/config", "POST", {"Content-Type": "application/json", "X-SOS-Minter": "1"}, b'{"royalty_pct": 7}') == 200, "the app's own POST works")
 check(req("/static/../server.py") == 404, "no path traversal")
 check(req("/api/config", "POST", {"Content-Type": "application/json", "X-SOS-Minter": "1"}, b'{"royalty_pct": NaN}') == 400, "NaN in a request is refused")
+check(req("/api/sol/rpc", "POST", {"Content-Type": "application/json"}, b'{"method":"getBalance"}') == 403, "the Solana relay needs the app header too (CSRF)")
+check(req("/api/sol/rpc", "POST", {"Content-Type": "application/json", "X-SOS-Minter": "1", "Origin": "https://evil.example"}, b'{"method":"getBalance"}') == 403, "cross-site Solana relay calls refused")
 print("\n" + ("ALL PASSED" if not FAIL else f"{FAIL} FAILED")); sys.exit(1 if FAIL else 0)

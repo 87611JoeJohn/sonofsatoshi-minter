@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mint on Solana — SonOfSatoshi Minter</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1>Mint on Solana</h1></a>
+  <span class="badge" id="net">…</span>
+  <nav><a href="/" id="back">← Back to the collection</a><a href="/guide#solana" target="_blank">📖 Help</a></nav>
+</header>
+<main>
+  <div class="card" id="info">loading…</div>
+
+  <div class="card">
+    <h2><span class="n">1</span>Connect your wallet</h2>
+    <p class="sub">Phantom, Solflare or Backpack (browser extension). The wallet pays and approves every step; this app never sees a key.</p>
+    <div id="wallets"></div>
+    <div class="out" id="oWallet"></div>
+    <button class="ghost small" id="airdrop" style="display:none">🚰 Get 2 free test SOL</button>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>Create the collection</h2>
+    <p class="sub">One account on Solana holds the collection's name, its picture and the royalty rule for every piece in it.</p>
+    <div class="row">
+      <div><label>Royalty %</label><input id="royPct" type="number" min="0" max="30" step="0.5"></div>
+      <div><label>Royalty goes to <span class="sub">(blank = the connected wallet)</span></label><input id="royAddr" placeholder="Solana address" spellcheck="false" autocomplete="off"></div>
+    </div>
+    <button id="mkColl">✨ Create the collection</button>
+    <div class="out" id="oColl"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>Mint the pieces</h2>
+    <p class="sub">Your wallet approves a whole batch at once (a few pieces per transaction). Big collections take several batches;
+      if anything stops halfway, come back and press the button again: pieces already minted are skipped.</p>
+    <div class="row">
+      <div><label>From piece</label><input id="from" type="number" min="1" value="1"></div>
+      <div><label>to</label><input id="to" type="number" min="1"></div>
+      <div><label>Pieces per approval</label><input id="per" type="number" min="1" max="60" value="24"></div>
+    </div>
+    <label>Mint to <span class="sub">(blank = the connected wallet)</span></label>
+    <input id="owner" placeholder="Solana address" spellcheck="false" autocomplete="off">
+    <div class="note" id="cost">Connect a wallet to see the cost.</div>
+    <div class="chk" id="mainnetBox" style="display:none"><input type="checkbox" id="iUnderstand"><label for="iUnderstand" style="margin:0">I understand this spends real SOL and minting can't be undone.</label></div>
+    <button id="mint">🪙 Mint</button>
+    <div class="bar" id="mBar" style="display:none"><i></i></div>
+    <div class="out" id="oMint"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span>Manage</h2>
+    <p class="sub"><b>Re-point</b> after you stored an edited version (step 4 on the main page): every minted piece is switched to the new links.
+      <b>Royalty</b> can be changed any time. <b>Lock</b> freezes the names and links of the collection and every piece in it, forever.</p>
+    <button class="ghost" id="repoint">↻ Re-point minted pieces</button>
+    <button class="ghost" id="setRoy">% Set the royalty above</button>
+    <div class="out" id="oManage"></div>
+    <details style="margin-top:12px"><summary>🔒 Lock forever</summary>
+      <p class="sub">After locking, nobody (you included) can change a name, a story or a picture link again. Do it only when everything is final.
+        Type <b>LOCK</b> to enable the button.</p>
+      <input id="lockWord" placeholder="LOCK" autocomplete="off" style="max-width:160px"> <button class="danger" id="lock" disabled>Lock the collection</button>
+      <div class="out" id="oLock"></div>
+    </details>
+  </div>
+
+  <div class="card"><h2><span class="n">5</span>Minted pieces</h2><div id="list" class="sub">Nothing minted yet.</div></div>
+</main>
+<script type="module" src="/static/solana.js"></script>
+</body></html>

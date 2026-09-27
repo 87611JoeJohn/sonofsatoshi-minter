@@ -14,7 +14,7 @@ jobs:
       - run: python3 -m py_compile server.py
       - run: python3 tools/selftest.py
   wallet-bundle:
-    # proves web/stacks.js is exactly what the pinned sources in tools/wallet-bundle build
+    # proves web/stacks.js, web/btc.js and web/sol.js are exactly what the pinned sources in tools/ build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -22,13 +22,14 @@ jobs:
         with: { node-version: "22" }
       - run: bash tools/wallet-bundle/build.sh
       - run: bash tools/btc-bundle/build.sh
+      - run: bash tools/sol-bundle/build.sh
   no-secrets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: no keys, seeds or private addresses in the repo
         run: |
-          ! grep -rnEI --exclude-dir=.git --exclude-dir=.github --exclude-dir=node_modules --exclude=stacks.js --exclude=btc.js \
+          ! grep -rnEI --exclude-dir=.git --exclude-dir=.github --exclude-dir=node_modules --exclude=stacks.js --exclude=btc.js --exclude=sol.js \
             -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' \
             -e '"privateKey"' \
             -e 'eyJhbGciOi[A-Za-z0-9_-]{20,}' \

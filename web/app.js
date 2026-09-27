@@ -24,7 +24,7 @@ function openProject(n) {
   $('#cname').value = n; syncMintLink(); loadReview();
   $('#cname').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-function syncMintLink() { $('#mintLink').href = (CFG.chain === 'ordinals' ? '/inscribe?name=' : '/mint?name=') + encodeURIComponent(NAME()); }
+function syncMintLink() { $('#mintLink').href = ({ ordinals: '/inscribe?name=', solana: '/solana?name=' }[CFG.chain] || '/mint?name=') + encodeURIComponent(NAME()); }
 
 // ---------- step 1: upload in chunks (big collections never hit one giant request) ----------
 const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
@@ -216,6 +216,17 @@ $('#cname').addEventListener('input', syncMintLink);
     c5.querySelector('h2').innerHTML = '<span class="n">4</span>Inscribe on Bitcoin';
     c5.querySelector('.sub').textContent = 'Compress the pieces, see the exact cost, then pay one address from any Bitcoin wallet. The art is written onto Bitcoin itself.';
     $('#mintLink').textContent = '🟠 Go to inscribe →';
+  } else if (CFG.chain === 'solana') {
+    nb.textContent = CFG.sol_network === 'mainnet' ? 'SOLANA · real SOL' : 'solana ' + CFG.sol_network + ' · practice';
+    if (CFG.sol_network === 'mainnet') nb.classList.add('main');
+    $('#royAddr').closest('div').style.display = 'none';                      // royalties go to the minting wallet (or Settings)
+    $('#pubBtn').textContent = '☁ Store on IPFS';
+    $('#pubBtn').closest('.card').querySelector('.sub').innerHTML = 'Uploads the art and stories to <b id="storeName">your storage</b> with https links, the way Solana wallets and marketplaces read them. ' +
+      'Run this again any time you edit something (then use <i>Re-point</i> on the mint page if you have already minted).';
+    const c5 = $('#mintLink').closest('.card');
+    c5.querySelector('h2').innerHTML = '<span class="n">5</span>Mint on Solana';
+    c5.querySelector('.sub').textContent = 'Connect Phantom, Solflare or Backpack, create the collection with its royalty, then mint the pieces in batches.';
+    $('#mintLink').textContent = '🟪 Go to mint on Solana →';
   } else {
     nb.textContent = CFG.network === 'mainnet' ? 'MAINNET · real STX' : 'testnet · practice';
     if (CFG.network === 'mainnet') nb.classList.add('main');

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SonOfSatoshi Minter — a sovereign NFT minter for Stacks.
+SonOfSatoshi Minter — a sovereign NFT minter for Stacks, Bitcoin Ordinals and Solana.
 
 Drop in a folder of art and get a finished collection:
   1. images numbered 0001, 0002 …
@@ -8,7 +8,8 @@ Drop in a folder of art and get a finished collection:
      (or your own trait weights, no AI needed)
   3. SIP-016 metadata and a SIP-009 Clarity contract you can re-point, refresh and freeze later
   4. everything stored on IPFS: your own node, Pinata, or both
-  5. deploy + mint from your own wallet (Xverse / Leather, Ledger works). This app never sees a private key.
+  5. deploy + mint from your own wallet (Xverse / Leather on Stacks, Phantom / Solflare / Backpack on Solana).
+     This app never sees a private key.
 
 Pure Python standard library. Runs on your computer at http://127.0.0.1:8130 and nowhere else.
 
@@ -33,7 +34,7 @@ PROJECTS = Path(os.environ.get("SOS_MINTER_PROJECTS") or (DATA / "projects"))
 CONFIG = DATA / "config.json"
 PORT = int(os.environ.get("SOS_MINTER_PORT", "8130"))
 MAX_BODY = 256 * 1024 * 1024          # one upload request; the page sends big collections in chunks
-SECRET_KEYS = ("pinata_jwt", "rpc_pass")   # never sent back to the browser
+SECRET_KEYS = ("pinata_jwt", "rpc_pass", "sol_rpc")   # never sent back to the browser (paid Solana RPC links carry an API key)
 
 DEFAULT_CONFIG = {
     "setup_done": False,
@@ -53,7 +54,7 @@ DEFAULT_CONFIG = {
     "royalty_pct": 5,
     "rarity_tiers": None,
     # ---- Bitcoin Ordinals ----
-    "chain": "stacks",                 # stacks | ordinals
+    "chain": "stacks",                 # stacks | ordinals | solana
     "btc_network": "testnet4",         # mainnet | testnet4 | signet | regtest
     "btc_backend": "esplora",          # esplora (mempool.space or your own) | rpc (your own Bitcoin Core)
     "esplora_url": "",                 # blank = mempool.space for the chosen network
@@ -64,6 +65,10 @@ DEFAULT_CONFIG = {
     "refund_address": "",              # leftover sats go back here
     "ord_postage": 546,                # sats that travel with each inscription
     "ord_story_onchain": True,         # inscribe the story + traits with the art
+    # ---- Solana (Metaplex Core) ----
+    "sol_network": "devnet",           # devnet | mainnet | localnet
+    "sol_rpc": "",                     # blank = the network's free public RPC; paid ones (Helius, QuickNode…) are faster
+    "sol_owner": "",                   # where minted pieces go; blank = the wallet that mints
 }
 
 # ---------------- config ----------------
@@ -89,6 +94,7 @@ def public_config(cfg):
         out[k + "_set"] = bool(cfg.get(k))
     out["version"] = VERSION
     out["projects_dir"] = str(PROJECTS)
+    out["sol_rpc_host"] = urllib.parse.urlparse(sol_endpoint(cfg)).hostname or ""
     return out
 
 _ADDR_RE = re.compile(r"^S[PMTN][0-9A-HJKMNP-TV-Z]{38,40}$")
@@ -97,6 +103,17 @@ def _btc_addr_ok(a, network):
     """Bech32/bech32m address for this network (segwit v0 or taproot). Exact checksum is verified again in the page."""
     hrp = _BTC_HRP.get(network, "bc")
     return bool(re.fullmatch(hrp + r"1[02-9ac-hj-np-z]{8,87}", a.lower())) and (a == a.lower() or a == a.upper())
+_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+def _sol_addr_ok(a):
+    """A Solana address is 32 bytes written in base58."""
+    if not isinstance(a, str) or not 32 <= len(a) <= 44 or any(c not in _B58 for c in a): return False
+    n = 0
+    for c in a: n = n * 58 + _B58.index(c)
+    pad = len(a) - len(a.lstrip("1"))
+    return pad + (n.bit_length() + 7) // 8 == 32
+_SOL_RPC = {"mainnet": "https://api.mainnet-beta.solana.com", "devnet": "https://api.devnet.solana.com", "localnet": "http://127.0.0.1:8899"}
+def sol_endpoint(cfg):
+    return cfg.get("sol_rpc") or _SOL_RPC.get(cfg.get("sol_network"), _SOL_RPC["devnet"])
 _URL_RE = re.compile(r"^https?://[A-Za-z0-9._~:/?#\[\]@!$&()*+,;=%-]+$")   # plain ASCII URL characters only
 
 def update_config(body):
@@ -132,8 +149,8 @@ def update_config(body):
         if "setup_done" in body: cfg["setup_done"] = bool(body["setup_done"])
         # ---- Bitcoin Ordinals settings ----
         if "chain" in body:
-            if body["chain"] in ("stacks", "ordinals"): cfg["chain"] = body["chain"]
-            else: errs.append("chain must be stacks or ordinals")
+            if body["chain"] in ("stacks", "ordinals", "solana"): cfg["chain"] = body["chain"]
+            else: errs.append("chain must be stacks, ordinals or solana")
         if "btc_network" in body:
             if body["btc_network"] in _BTC_HRP: cfg["btc_network"] = body["btc_network"]
             else: errs.append("bitcoin network must be mainnet, testnet4, signet or regtest")
@@ -156,6 +173,18 @@ def update_config(body):
             try: cfg["ord_postage"] = max(546, min(100000, int(body["ord_postage"])))
             except Exception: errs.append("postage must be a whole number of sats")
         if "ord_story_onchain" in body: cfg["ord_story_onchain"] = bool(body["ord_story_onchain"])
+        # ---- Solana settings ----
+        if "sol_network" in body:
+            if body["sol_network"] in _SOL_RPC: cfg["sol_network"] = body["sol_network"]
+            else: errs.append("solana network must be mainnet, devnet or localnet")
+        if "sol_rpc" in body:                            # empty = back to the public RPC
+            v = str(body["sol_rpc"]).strip().rstrip("/")
+            if v and not _URL_RE.match(v): errs.append("the Solana RPC must start with http:// or https://")
+            else: cfg["sol_rpc"] = v
+        if "sol_owner" in body:
+            v = str(body["sol_owner"]).strip()
+            if v and not _sol_addr_ok(v): errs.append("that isn't a Solana address")
+            else: cfg["sol_owner"] = v
         if cfg.get("chain") == "ordinals" and cfg.get("btc_network") == "regtest" and cfg.get("btc_backend") != "rpc":
             errs.append("regtest needs your own Bitcoin Core node (data source: rpc)")
         a = cfg.get("owner_address", "")
@@ -814,6 +843,8 @@ def ipfs_add_pinata(jwt, base, label):
     return resp["IpfsHash"]
 
 def _link(cfg, cid, path):
+    if cfg.get("chain") == "solana":                  # Solana wallets and marketplaces expect https links
+        return f"{(cfg.get('public_gateway') or 'https://ipfs.io').rstrip('/')}/ipfs/{cid}/{path}"
     if cfg.get("link_style") == "gateway" and cfg.get("public_gateway"):
         return f"{cfg['public_gateway'].rstrip('/')}/ipfs/{cid}/{path}"
     return f"ipfs://{cid}/{path}"
@@ -833,13 +864,26 @@ def _push(cfg, base, name):
         cid = cid or pc
     return cid, notes
 
+def _sol_collection_json(cfg, base, name, cid1, metas):
+    """The collection's own card on Solana: name, description and the first piece as its picture."""
+    first = json.loads(metas[0].read_text())
+    lore = ""
+    try: lore = json.loads((base / "collection.json").read_text()).get("lore", "")
+    except Exception: pass
+    img = first.get("image", "")
+    (base / "metadata" / "collection.json").write_text(json.dumps({
+        "name": name, "description": (lore or first.get("description", ""))[:1000], "image": img,
+        "properties": {"files": [{"uri": img, "type": first.get("properties", {}).get("files", [{}])[0].get("type", "image/png")}],
+                       "category": "image"}}, indent=2))
+
 def do_publish(cfg, body):
     """Two passes: 1) store to learn the images' CID, 2) write those links into the metadata and store again.
     The final folder CID is the collection; the contract's base-uri points at <cid>/metadata/{id}.json."""
     name = str(body.get("collection_name", "")).strip()
     base = project_path(name)
-    metas = sorted((base / "metadata").glob("*.json")) if (base / "metadata").exists() else []
+    metas = sorted(f for f in (base / "metadata").glob("*.json") if f.stem.isdigit()) if (base / "metadata").exists() else []
     if not metas: return 400, {"error": "build the collection first (step 2 or Build)"}
+    sol = cfg.get("chain") == "solana"
     if len(metas) != len(list_images(base / "images")):
         return 400, {"error": "the number of images and metadata files differ — press Build again"}
     try:
@@ -848,13 +892,25 @@ def do_publish(cfg, body):
             d = json.loads(jf.read_text()); img = d.get("image", "")
             fname = img.rsplit("/", 1)[-1]
             d["image"] = _link(cfg, cid1, f"images/{fname}")
+            if sol:   # Metaplex JSON: the file list tells wallets what kind of media it is
+                d.pop("sip", None)
+                d["properties"] = {"files": [{"uri": d["image"], "type": _CT.get(Path(fname).suffix.lower(), "image/png")}], "category": "image"}
+                jf.write_text(json.dumps(d, indent=2)); continue
             order = ["name", "description", "image", "attributes"]
             # SIP-016: "sip": 16 first — without it Xverse shows a gray box instead of the art
             d = {"sip": 16, **{k: d[k] for k in order if k in d}, **{k: v for k, v in d.items() if k not in order + ["sip"]}}
             jf.write_text(json.dumps(d, indent=2))
+        if sol: _sol_collection_json(cfg, base, name, cid1, metas)
         cid, notes = _push(cfg, base, name)
     except Exception as e:
         return 502, {"error": f"storing failed: {e}"}
+    if sol:
+        bps, _ = _royalty(cfg, body, _read_state(base))
+        st = _write_state(base, cid=cid, sol_base=_link(cfg, cid, "metadata/"), stored_on=notes, published_count=len(metas),
+                          royalty_pct=bps / 100)
+        return 200, {"ok": True, "cid": cid, "base_uri": st["sol_base"] + "{id}.json", "stored_on": notes,
+                     "preview": _link(cfg, cid, "images/" + list_images(base / "images")[0].name),
+                     "redeploy_note": bool((st.get("sol_" + cfg.get("sol_network", "devnet")) or {}).get("assets"))}
     uri = _link(cfg, cid, "metadata/{id}.json")
     if len(uri) > 256: return 400, {"error": "the metadata address is too long for the contract — use ipfs:// links in Settings"}
     write_contract(cfg, base, name, body, base_uri=uri)
@@ -1066,7 +1122,107 @@ def ord_collection_file(body):
     return 200, {"ok": True, "count": len(items), "items": items, "path": str(f)}
 
 # ---------------- HTTP ----------------
-PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html", "/inscribe": "inscribe.html",
+# ---------------- Solana (Metaplex Core): RPC relay + mint records ----------------
+_SOL_GENESIS = {"mainnet": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d", "devnet": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"}
+# only what the mint page needs; the relay is not a general-purpose proxy for your RPC key
+_SOL_METHODS = {"getLatestBlockhash", "sendTransaction", "simulateTransaction", "getSignatureStatuses", "getBlockHeight",
+                "getAccountInfo", "getMultipleAccounts", "getBalance", "getRecentPrioritizationFees", "getVersion", "getGenesisHash",
+                "getMinimumBalanceForRentExemption", "getSlot", "getTransaction", "getFeeForMessage", "getProgramAccounts",
+                "isBlockhashValid", "requestAirdrop"}
+_SOL_LOCK = threading.Lock()
+
+def _sol_call(cfg, method, params=None, endpoint=None):
+    req = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}).encode()
+    _, b = _get(endpoint or sol_endpoint(cfg), timeout=15, headers={"Content-Type": "application/json"}, data=req)
+    o = json.loads(b)
+    if o.get("error"): raise RuntimeError(o["error"].get("message", "RPC error"))
+    return o.get("result")
+
+def sol_relay(cfg, raw):
+    """Pass the page's JSON-RPC calls to your Solana RPC (keeps a paid RPC's key out of the browser)."""
+    try: body = json.loads(raw)
+    except Exception: return 400, b'{"error":"bad request"}'
+    calls = body if isinstance(body, list) else [body]
+    if not calls or len(calls) > 100 or not all(isinstance(c, dict) and c.get("method") in _SOL_METHODS for c in calls):
+        return 403, b'{"error":"that call is not allowed through this app"}'
+    if cfg.get("sol_network") == "mainnet" and any(c.get("method") == "requestAirdrop" for c in calls):
+        return 403, b'{"error":"no airdrops on mainnet"}'
+    try:
+        return _get(sol_endpoint(cfg), timeout=30, headers={"Content-Type": "application/json"}, data=raw)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()[:4000]
+
+def sol_check(cfg, body):
+    net = body.get("sol_network", cfg.get("sol_network"))
+    if net not in _SOL_RPC: return 400, {"error": "unknown Solana network"}
+    ep = str(body.get("sol_rpc") or "").strip().rstrip("/")
+    if ep and not _URL_RE.match(ep): return 400, {"error": "the RPC must start with http:// or https://"}
+    ep = ep or (cfg.get("sol_rpc") if net == cfg.get("sol_network") else "") or _SOL_RPC[net]
+    try:
+        g = _sol_call(cfg, "getGenesisHash", endpoint=ep); v = _sol_call(cfg, "getVersion", endpoint=ep)
+        acc = _sol_call(cfg, "getAccountInfo", ["CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d", {"encoding": "base64", "dataSlice": {"offset": 0, "length": 0}}], endpoint=ep)
+    except Exception as e:
+        return 200, {"ok": False, "detail": f"no answer from {urllib.parse.urlparse(ep).hostname} ({type(e).__name__})"}
+    if net in _SOL_GENESIS and g != _SOL_GENESIS[net]: return 200, {"ok": False, "detail": f"that RPC is not on Solana {net}"}
+    if not (acc or {}).get("value"): return 200, {"ok": False, "detail": "the Metaplex Core program is not on this network (a local validator needs it loaded, see the Guide)"}
+    return 200, {"ok": True, "detail": f"Solana {net} answers (version {v.get('solana-core', '?')}), Metaplex Core is there"}
+
+def sol_info(cfg, name):
+    base = project_path(name)
+    if not (base / ".collection").exists(): return 404, {"error": "unknown collection"}
+    st = _read_state(base); count = len(list_images(base / "images"))
+    if not st.get("sol_base"): return 400, {"error": "store the collection first (Publish), with Solana chosen in Settings"}
+    pieces = []
+    for i in range(1, count + 1):
+        try: nm = json.loads(_meta_file(base, i).read_text()).get("name", "")
+        except Exception: nm = ""
+        pieces.append({"id": i, "name": nm or f"{name} #{i:04d}", "uri": f"{st['sol_base']}{i}.json"})
+    net = cfg.get("sol_network", "devnet")
+    bps, _ = _royalty(cfg, {}, st)
+    return 200, {"collection": name, "pieces": pieces, "collection_uri": st["sol_base"] + "collection.json",
+                 "stale": st.get("published_count") != count, "network": net,
+                 "owner": cfg.get("sol_owner", ""), "royalty_bps": bps, "sol": st.get("sol_" + net) or {},
+                 "rpc_host": urllib.parse.urlparse(sol_endpoint(cfg)).hostname or ""}
+
+def sol_save(body):
+    """Records what happened on-chain, so a closed page never loses track of a collection or a batch."""
+    name = str(body.get("collection_name", "")).strip(); base = project_path(name)
+    if not (base / ".collection").exists(): return 404, {"error": "unknown collection"}
+    key = "sol_" + load_config().get("sol_network", "devnet")    # devnet practice never mixes with mainnet records
+    with _SOL_LOCK:
+        st = _read_state(base); sol = st.get(key) or {}
+        c = body.get("collection")
+        if c is not None:
+            if not _sol_addr_ok(c): return 400, {"error": "bad collection address"}
+            if sol.get("collection") and sol["collection"] != c and not body.get("replace"):
+                return 409, {"error": "this collection already has a Solana collection address"}
+            sol["collection"] = c
+        if isinstance(body.get("assets"), dict):
+            a = sol.get("assets") or {}
+            for k, v in body["assets"].items():
+                if not (str(k).isdigit() and _sol_addr_ok(v)): return 400, {"error": "bad asset record"}
+                a[str(int(k))] = v
+            sol["assets"] = a
+        if isinstance(body.get("pending"), list):
+            pend = []
+            for x in body["pending"][:500]:
+                if not (isinstance(x, dict) and re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{64,90}", str(x.get("sig", ""))) and
+                        isinstance(x.get("lastValid"), int)): return 400, {"error": "bad pending record"}
+                ids = x.get("ids") or {}
+                if not (isinstance(ids, dict) and all(str(k).isdigit() and _sol_addr_ok(v) for k, v in ids.items())):
+                    return 400, {"error": "bad pending record"}
+                pend.append({"sig": x["sig"], "lastValid": x["lastValid"], "kind": str(x.get("kind", ""))[:20], "ids": ids,
+                             "uri": str(x.get("uri", ""))[:300]})
+            sol["pending"] = pend
+        if "royalty_bps" in body: sol["royalty_bps"] = max(0, min(3000, int(body["royalty_bps"])))
+        if "uris" in body and isinstance(body["uris"], dict):   # link each piece currently points to (after a re-point)
+            u = sol.get("uris") or {}
+            u.update({str(int(k)): str(v)[:300] for k, v in body["uris"].items() if str(k).isdigit()}); sol["uris"] = u
+        if body.get("locked") is True: sol["locked"] = True
+        _write_state(base, **{key: sol})
+    return 200, {"ok": True, "sol": sol}
+
+PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html", "/inscribe": "inscribe.html", "/solana": "solana.html",
          "/mint": "mint.html", "/settings": "setup.html"}
 STATIC = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json"}
 # the only files /static/ can ever serve: the app's own web/ folder, listed once at startup
@@ -1128,6 +1284,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/collection": return self._send(*collection_view((q.get("name") or [""])[0]))
         if p == "/api/lore-status": return self._send(*do_lore_status((q.get("name") or [""])[0]))
         if p == "/api/mintinfo": return self._send(*mint_info(cfg, (q.get("name") or [""])[0]))
+        if p == "/api/sol/info": return self._send(*sol_info(cfg, (q.get("name") or [""])[0]))
         if p == "/api/img":
             name = (q.get("c") or [""])[0]
             try: tid = int((q.get("id") or ["0"])[0])
@@ -1144,6 +1301,10 @@ class H(BaseHTTPRequestHandler):
         try: n = int(self.headers.get("Content-Length", 0))
         except ValueError: n = -1
         if n < 0 or n > MAX_BODY: return self._send(413, {"error": "upload too big for one request"})
+        if self.path == "/api/sol/rpc":             # JSON-RPC can be a list, so it skips the dict check below
+            if n > 4 * 1024 * 1024: return self._send(413, {"error": "too big"})
+            try: return self._send(*sol_relay(load_config(), self.rfile.read(n)))
+            except Exception as e: return self._send(502, {"error": f"Solana RPC: {type(e).__name__}"})
         try: body = json.loads(self.rfile.read(n) or b"{}", parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))
         except Exception: return self._send(400, {"error": "bad request"})
         if not isinstance(body, dict): return self._send(400, {"error": "bad request"})
@@ -1167,6 +1328,8 @@ class H(BaseHTTPRequestHandler):
             if p == "/api/ord/batch-save": return self._send(*ord_batch_save(body))
             if p == "/api/ord/batches": return self._send(*ord_batches(body))
             if p == "/api/ord/collection-file": return self._send(*ord_collection_file(body))
+            if p == "/api/sol/check": return self._send(*sol_check(cfg, body))
+            if p == "/api/sol/save": return self._send(*sol_save(body))
         except Exception as e:
             return self._send(500, {"error": f"{type(e).__name__}: {e}"})
         return self._send(404, {"error": "not found"})
