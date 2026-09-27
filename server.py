@@ -1131,9 +1131,9 @@ _SOL_METHODS = {"getLatestBlockhash", "sendTransaction", "simulateTransaction", 
                 "isBlockhashValid", "requestAirdrop"}
 _SOL_LOCK = threading.Lock()
 
-def _sol_call(cfg, method, params=None, endpoint=None):
+def _sol_call(cfg, method, params=None):
     req = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}).encode()
-    _, b = _get(endpoint or sol_endpoint(cfg), timeout=15, headers={"Content-Type": "application/json"}, data=req)
+    _, b = _get(sol_endpoint(cfg), timeout=15, headers={"Content-Type": "application/json"}, data=req)
     o = json.loads(b)
     if o.get("error"): raise RuntimeError(o["error"].get("message", "RPC error"))
     return o.get("result")
@@ -1155,12 +1155,14 @@ def sol_relay(cfg, raw):
 def sol_check(cfg, body):
     net = body.get("sol_network", cfg.get("sol_network"))
     if net not in _SOL_RPC: return 400, {"error": "unknown Solana network"}
-    ep = str(body.get("sol_rpc") or "").strip().rstrip("/")
-    if ep and not _URL_RE.match(ep): return 400, {"error": "the RPC must start with http:// or https://"}
-    ep = ep or (cfg.get("sol_rpc") if net == cfg.get("sol_network") else "") or _SOL_RPC[net]
+    # same as saving it: the typed RPC, else the saved one (if it belongs to this network), else the public one
+    c = {**cfg, "sol_network": net, "sol_rpc": cfg.get("sol_rpc", "") if net == cfg.get("sol_network") else ""}
+    if body.get("sol_rpc"): c["sol_rpc"] = str(body["sol_rpc"]).strip().rstrip("/")
+    if c["sol_rpc"] and not _URL_RE.match(c["sol_rpc"]): return 400, {"error": "the RPC must start with http:// or https://"}
+    ep = sol_endpoint(c)
     try:
-        g = _sol_call(cfg, "getGenesisHash", endpoint=ep); v = _sol_call(cfg, "getVersion", endpoint=ep)
-        acc = _sol_call(cfg, "getAccountInfo", ["CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d", {"encoding": "base64", "dataSlice": {"offset": 0, "length": 0}}], endpoint=ep)
+        g = _sol_call(c, "getGenesisHash"); v = _sol_call(c, "getVersion")
+        acc = _sol_call(c, "getAccountInfo", ["CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d", {"encoding": "base64", "dataSlice": {"offset": 0, "length": 0}}])
     except Exception as e:
         return 200, {"ok": False, "detail": f"no answer from {urllib.parse.urlparse(ep).hostname} ({type(e).__name__})"}
     if net in _SOL_GENESIS and g != _SOL_GENESIS[net]: return 200, {"ok": False, "detail": f"that RPC is not on Solana {net}"}
