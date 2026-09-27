@@ -6,17 +6,44 @@ async function api(path, body) {
     body: body ? JSON.stringify(body) : undefined });
   return r.json();
 }
-let CFG = {}, STEP = 0;
-const STEPS = $$('.step').length;
-const S = { network: 'testnet', storage: 'node', link_style: 'ipfs' };
-
-function show(n) {
-  STEP = Math.max(0, Math.min(STEPS - 1, n));
-  $$('.step').forEach(s => s.classList.toggle('on', +s.dataset.step === STEP));
-  $('#dots').innerHTML = Array.from({ length: STEPS }, (_, i) => `<i class="${i <= STEP ? 'on' : ''}"></i>`).join('');
-  if (STEP === 4) testAi();
-  if (STEP === 5) summary();
+let CFG = {}, STEP = '0';
+const S = { network: 'testnet', storage: 'node', link_style: 'ipfs', chain: 'stacks', btc_network: 'testnet4', btc_backend: 'esplora' };
+// the steps each chain walks through (Ordinals has no Stacks wallet, IPFS or royalty steps)
+const ORDER = { stacks: ['0', 'c', '1', '2', '3', '4', '5'], ordinals: ['0', 'c', 'b', '4', '5'] };
+const order = () => ORDER[S.chain] || ORDER.stacks;
+function show(id) {
+  if (!order().includes(id)) id = order()[0];
+  STEP = id; const o = order(), k = o.indexOf(id);
+  $$('.step').forEach(s => s.classList.toggle('on', s.dataset.step === id));
+  $('#dots').innerHTML = o.map((_, i) => `<i class="${i <= k ? 'on' : ''}"></i>`).join('');
+  if (id === '4') testAi();
+  if (id === '5') summary();
   window.scrollTo(0, 0);
+}
+const step = d => { const o = order(), k = o.indexOf(STEP); return o[Math.max(0, Math.min(o.length - 1, k + d))]; };
+const PREFIX = { mainnet: 'bc1', testnet4: 'tb1', signet: 'tb1', regtest: 'bcrt1' };
+function setChain(v) {
+  S.chain = v; pick('#chainChoices', 'chain', v);
+  const ord = v === 'ordinals';
+  $('#royaltyBox').style.display = ord ? 'none' : ''; $('#finishTitle').textContent = ord ? 'Finish' : 'Royalty and finish';
+}
+function setBtcNet(v) { S.btc_network = v; pick('#btcNetChoices', 'btcnet', v); $('#ordPrefix').textContent = PREFIX[v] + 'p'; checkBtcAddrs(); }
+function setBtcSrc(v) { S.btc_backend = v; pick('#btcSrcChoices', 'btcsrc', v); $('#esploraBox').style.display = v === 'esplora' ? '' : 'none'; $('#rpcBox').style.display = v === 'rpc' ? '' : 'none'; }
+function checkBtcAddrs() {
+  const pre = PREFIX[S.btc_network], o = $('#btcAddrOut'), a = $('#ordAddr').value.trim(), r = $('#refundAddr').value.trim();
+  const bad = [];
+  if (a && !a.toLowerCase().startsWith(pre)) bad.push(`the ordinals address should start with ${pre}p on ${S.btc_network}`);
+  else if (a && !a.toLowerCase().startsWith(pre + 'p')) bad.push('your ordinals address is not a taproot (…1p…) address; use your wallet\'s Ordinals address');
+  if (r && !r.toLowerCase().startsWith(pre)) bad.push(`the refund address should start with ${pre} on ${S.btc_network}`);
+  o.textContent = bad.length ? '✕ ' + bad.join('; ') : (a && r ? '✓ looks right' : ''); o.className = 'out ' + (bad.length ? 'bad' : 'good');
+  return !bad.length && !!a && !!r;
+}
+async function testBtc() {
+  $('#btcOut').textContent = 'testing…';
+  const body = { btc_network: S.btc_network, btc_backend: S.btc_backend, esplora_url: $('#esploraUrl').value.trim(), rpc_url: $('#rpcUrl').value.trim(), rpc_user: $('#rpcUser').value.trim() };
+  if ($('#rpcPass').value) body.rpc_pass = $('#rpcPass').value;
+  const r = await api('/api/btc/check', body);
+  dot('#btcDot', !!r.ok, r.detail || r.error || 'no answer', '#btcOut'); return !!r.ok;
 }
 function pick(group, attr, val) {
   $$(group + ' .choice').forEach(c => c.classList.toggle('on', c.dataset[attr] === val));
@@ -88,14 +115,29 @@ async function testAi() {
 }
 function summary() {
   const store = { node: 'your own IPFS node', pinata: 'Pinata', both: 'your IPFS node + Pinata' }[S.storage];
-  const rows = [['Network', S.network], ['Mint to', $('#owner').value.trim() || '— not set'], ['Art stored on', store],
-    ['AI stories', $('#aiOn').checked ? `on (${$('#visionModel').value} + ${$('#writerModel').value})` : 'off']];
+  const ai = ['AI stories', $('#aiOn').checked ? `on (${$('#visionModel').value} + ${$('#writerModel').value})` : 'off'];
+  const rows = S.chain === 'ordinals'
+    ? [['Minting on', 'Bitcoin Ordinals (' + S.btc_network + ')'], ['Inscriptions go to', $('#ordAddr').value.trim() || '— not set'],
+       ['Refunds go to', $('#refundAddr').value.trim() || '— not set'], ['Chain data', S.btc_backend === 'rpc' ? 'your own Bitcoin node' : ($('#esploraUrl').value.trim() || 'mempool.space')], ai]
+    : [['Network', S.network], ['Mint to', $('#owner').value.trim() || '— not set'], ['Art stored on', store], ai];
   $('#summary').replaceChildren(...rows.map(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b');
     b.textContent = k + ': '; d.append(b, document.createTextNode(v)); return d; }));
 }
 async function finish() {
-  if (!checkAddr()) { show(2); return; }
-  const body = {
+  if (S.chain === 'ordinals') {
+    if (!checkBtcAddrs()) { show('b'); return; }
+    const body = { chain: 'ordinals', btc_network: S.btc_network, btc_backend: S.btc_backend, esplora_url: $('#esploraUrl').value.trim(),
+      rpc_url: $('#rpcUrl').value.trim() || 'http://127.0.0.1:8332', rpc_user: $('#rpcUser').value.trim(),
+      ord_address: $('#ordAddr').value.trim(), refund_address: $('#refundAddr').value.trim(),
+      ai_enabled: $('#aiOn').checked, ollama_url: $('#ollamaUrl').value.trim() || 'http://127.0.0.1:11434',
+      vision_model: $('#visionModel').value, writer_model: $('#writerModel').value, setup_done: true };
+    if ($('#rpcPass').value) body.rpc_pass = $('#rpcPass').value;
+    const r = await api('/api/config', body);
+    if (r.error) { $('#saveOut').textContent = '✕ ' + r.error; $('#saveOut').className = 'out bad'; return; }
+    location.href = '/'; return;
+  }
+  if (!checkAddr()) { show('2'); return; }
+  const body = { chain: 'stacks',
     network: S.network, owner_address: $('#owner').value.trim().toUpperCase(), storage: S.storage,
     ipfs_api: $('#ipfsApi').value.trim() || 'http://127.0.0.1:5001', ipfs_gateway: $('#ipfsGw').value.trim() || 'http://127.0.0.1:8080',
     link_style: S.link_style, public_gateway: $('#pubGw').value.trim(),
@@ -111,18 +153,24 @@ async function finish() {
 }
 
 document.addEventListener('click', e => {
-  const go = e.target.closest('[data-go]');
-  if (go) {
-    const to = +go.dataset.go;
-    if (STEP === 2 && to > 2 && !checkAddr()) { $('#ownerOut').textContent ||= '✕ paste your Stacks address'; $('#ownerOut').className = 'out bad'; return; }
-    show(to); return;
+  const nav = e.target.closest('[data-nav]');
+  if (nav) {
+    const fwd = nav.dataset.nav === 'next';
+    if (fwd && STEP === '2' && !checkAddr()) { $('#ownerOut').textContent ||= '✕ paste your Stacks address'; $('#ownerOut').className = 'out bad'; return; }
+    if (fwd && STEP === 'b' && !checkBtcAddrs()) { $('#btcAddrOut').textContent ||= '✕ paste your ordinals and refund addresses'; $('#btcAddrOut').className = 'out bad'; return; }
+    show(step(fwd ? 1 : -1)); return;
   }
   const c = e.target.closest('.choice');
+  if (c && c.dataset.chain) setChain(c.dataset.chain);
+  if (c && c.dataset.btcnet) setBtcNet(c.dataset.btcnet);
+  if (c && c.dataset.btcsrc) setBtcSrc(c.dataset.btcsrc);
   if (c && c.dataset.net) setNet(c.dataset.net);
   if (c && c.dataset.store) setStore(c.dataset.store);
   if (c && c.dataset.link) setLink(c.dataset.link);
 });
 $('#owner').addEventListener('input', checkAddr);
+$('#ordAddr').addEventListener('input', checkBtcAddrs); $('#refundAddr').addEventListener('input', checkBtcAddrs);
+$('#testBtc').onclick = testBtc;
 $('#testNode').onclick = testNode; $('#testPinata').onclick = testPinata; $('#testGw').onclick = testGw;
 $('#testAi').onclick = testAi; $('#finish').onclick = finish;
 
@@ -134,5 +182,9 @@ $('#testAi').onclick = testAi; $('#finish').onclick = finish;
   $('#royalty').value = CFG.royalty_pct ?? 5; $('#aiOn').checked = !!CFG.ai_enabled;
   if (CFG.pinata_jwt_set) $('#jwtSaved').style.display = '';
   setNet(CFG.network || 'testnet'); setStore(CFG.storage || 'node'); setLink(CFG.link_style || 'ipfs');
-  show(CFG.setup_done ? 1 : 0);   // returning from Settings: skip the welcome
+  $('#ordAddr').value = CFG.ord_address || ''; $('#refundAddr').value = CFG.refund_address || '';
+  $('#esploraUrl').value = CFG.esplora_url || ''; $('#rpcUrl').value = CFG.rpc_url || ''; $('#rpcUser').value = CFG.rpc_user || '';
+  if (CFG.rpc_pass_set) $('#rpcSaved').style.display = '';
+  setChain(CFG.chain || 'stacks'); setBtcNet(CFG.btc_network || 'testnet4'); setBtcSrc(CFG.btc_backend || 'esplora');
+  show(CFG.setup_done ? 'c' : '0');   // returning from Settings: skip the welcome
 })();

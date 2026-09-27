@@ -25,7 +25,46 @@
       <li>Optional: <b>Ollama</b> if you want the AI to write the stories.</li>
     </ul>
     <p class="sub">Not sure about something? The <a href="/guide" target="_blank">Guide</a> explains every part in plain words.</p>
-    <div class="nav"><span></span><button data-go="1">Let's start →</button></div>
+    <div class="nav"><span></span><button data-nav="next">Let's start →</button></div>
+  </section>
+
+  <!-- chain -->
+  <section class="step card" data-step="c">
+    <h2>What are you minting on?</h2>
+    <div class="choices" id="chainChoices">
+      <div class="choice" data-chain="stacks"><b>🟣 Stacks</b><span>A Bitcoin layer with smart contracts: royalties, re-pointing, freezing. The art lives on IPFS.</span></div>
+      <div class="choice" data-chain="ordinals"><b>🟠 Bitcoin Ordinals</b><span>Inscribed directly on Bitcoin itself: the art lives on-chain forever. No IPFS, no contract, no royalties.</span></div>
+    </div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
+  </section>
+
+  <!-- bitcoin -->
+  <section class="step card" data-step="b">
+    <h2>Bitcoin settings</h2>
+    <label>Network</label>
+    <div class="choices" id="btcNetChoices">
+      <div class="choice" data-btcnet="testnet4"><b>🧪 Testnet4 <span class="tag">start here</span></b><span>Free test coins. Xverse: Settings → Network → Testnet4.</span></div>
+      <div class="choice" data-btcnet="signet"><b>🧪 Signet</b><span>Another free test network.</span></div>
+      <div class="choice" data-btcnet="mainnet"><b>🟠 Mainnet</b><span>Real bitcoin. Inscriptions are permanent.</span></div>
+    </div>
+    <label>Your ordinals address (where the inscriptions go, usually starts with <code id="ordPrefix">tb1p</code>)</label>
+    <input id="ordAddr" placeholder="bc1p… / tb1p…" autocomplete="off" spellcheck="false">
+    <label>Your refund address (leftover coins come back here; can be the same, or your payment address)</label>
+    <input id="refundAddr" placeholder="bc1… / tb1…" autocomplete="off" spellcheck="false">
+    <div class="out" id="btcAddrOut"></div>
+    <details><summary>Where do I find these?</summary><p><b>Xverse:</b> Receive → the <b>Ordinals</b> address (starts with bc1p) for inscriptions, and the <b>Bitcoin</b> address for refunds.
+      <b>Leather:</b> Receive → Ordinals / Bitcoin. Use an ordinals-aware wallet: an ordinary wallet may spend the inscription as a fee without warning.</p></details>
+    <label>Where to read the chain and send transactions</label>
+    <div class="choices" id="btcSrcChoices">
+      <div class="choice" data-btcsrc="esplora"><b>🌐 mempool.space <span class="tag">easiest</span></b><span>Nothing to run. Or point it at your own mempool/esplora server below.</span></div>
+      <div class="choice" data-btcsrc="rpc"><b>🏠 My own Bitcoin Core node</b><span>Fully sovereign. Needs the node's RPC address, user and password.</span></div>
+    </div>
+    <div id="esploraBox"><label>Your own mempool/esplora API (optional)</label><input id="esploraUrl" placeholder="blank = mempool.space"></div>
+    <div id="rpcBox"><div class="row"><div><label>RPC address</label><input id="rpcUrl" placeholder="http://127.0.0.1:8332"></div>
+      <div><label>RPC user</label><input id="rpcUser" autocomplete="off"></div><div><label>RPC password <span id="rpcSaved" class="tag" style="display:none">saved</span></label><input id="rpcPass" type="password" autocomplete="off"></div></div></div>
+    <button class="ghost small" id="testBtc">Test the connection</button>
+    <div class="status"><i class="dot" id="btcDot"></i><span id="btcOut">not tested yet</span></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
   </section>
 
   <!-- 1 network -->
@@ -39,7 +78,7 @@
     </div>
     <div class="note" id="faucetNote">On testnet, get free test STX: switch your wallet to <b>Testnet</b>, then use the faucet at
       <a href="https://explorer.hiro.so/sandbox/faucet?chain=testnet" target="_blank" rel="noopener">explorer.hiro.so → Sandbox → Faucet</a>.</div>
-    <div class="nav"><button class="ghost" data-go="0">← Back</button><button data-go="2">Next →</button></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
   </section>
 
   <!-- 2 address -->
@@ -56,7 +95,7 @@
       Testnet addresses start with <code>ST</code>, mainnet with <code>SP</code>. Using a Ledger? Pick the Ledger account in your wallet first.</p>
       <div class="note warn">Never type your 12/24 secret words anywhere in this app, or on any website. Nobody legitimate will ever ask.</div>
     </details>
-    <div class="nav"><button class="ghost" data-go="1">← Back</button><button data-go="3" id="addrNext">Next →</button></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next" id="addrNext">Next →</button></div>
   </section>
 
   <!-- 3 storage -->
@@ -95,7 +134,7 @@
         <button class="ghost small" id="testGw">Test it</button>
         <div class="status"><i class="dot" id="gwDot"></i><span id="gwOut">not tested yet</span></div></div>
     </details>
-    <div class="nav"><button class="ghost" data-go="2">← Back</button><button data-go="4" id="storeNext">Next →</button></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next" id="storeNext">Next →</button></div>
   </section>
 
   <!-- 4 AI -->
@@ -113,18 +152,18 @@
     </div>
     <div class="note" id="aiHelp">Need models? In a terminal: <code>ollama pull llava</code> and <code>ollama pull qwen2.5:14b</code>
       (a GPU with ~10 GB of memory is comfortable; smaller models like <code>llama3.2</code> work on less).</div>
-    <div class="nav"><button class="ghost" data-go="3">← Back</button><button data-go="5">Next →</button></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button data-nav="next">Next →</button></div>
   </section>
 
   <!-- 5 royalty + finish -->
   <section class="step card" data-step="5">
-    <h2>Royalty and finish</h2>
+    <h2 id="finishTitle">Royalty and finish</h2>
     <p class="sub">A royalty is the share of each resale that marketplaces pay back to you (for those that honor it).
       You can change it per collection, and even after minting.</p>
-    <label>Default royalty %</label><input id="royalty" type="number" min="0" max="30" step="0.5" value="5">
+    <div id="royaltyBox"><label>Default royalty %</label><input id="royalty" type="number" min="0" max="30" step="0.5" value="5"></div>
     <div class="note" id="summary"></div>
     <div class="out" id="saveOut"></div>
-    <div class="nav"><button class="ghost" data-go="4">← Back</button><button id="finish">✓ Save and open the minter</button></div>
+    <div class="nav"><button class="ghost" data-nav="back">← Back</button><button id="finish">✓ Save and open the minter</button></div>
   </section>
 </main>
 <script src="/static/setup.js"></script>

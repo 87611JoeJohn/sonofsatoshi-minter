@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inscribe on Bitcoin — SonOfSatoshi Minter</title>
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+</head><body>
+<header>
+  <a class="brand" href="/"><img src="/static/icon.svg" width="26" height="26" alt=""><h1>Inscribe on Bitcoin</h1></a>
+  <span class="badge" id="net">…</span>
+  <nav><a href="/" id="back">← Back to the collection</a><a href="/guide#ordinals" target="_blank">📖 Help</a></nav>
+</header>
+<main>
+  <div class="card" id="info">loading…</div>
+
+  <div class="card">
+    <h2><span class="n">1</span>Prepare the pieces</h2>
+    <p class="sub">On Bitcoin you pay for every byte, so size is price. A well-compressed WebP of a few dozen KB costs a small fraction
+      of a big PNG and looks the same on a phone. Nothing is inscribed until step 2.</p>
+    <div class="row">
+      <div><label>Fee rate (sats per vbyte)</label><select id="feePick"></select></div>
+      <div><label>Custom rate</label><input id="feeCustom" type="number" min="1" step="0.5" placeholder="e.g. 3"></div>
+    </div>
+    <div class="chk"><input type="checkbox" id="story"><label for="story" style="margin:0">Inscribe each piece's story and traits with it (adds a little to the size)</label></div>
+    <details style="margin-top:10px"><summary>Compress all pieces to WebP</summary>
+      <div class="row">
+        <div><label>Longest side (pixels)</label><input id="maxPx" type="number" value="1024" min="128" max="4096" step="64"></div>
+        <div><label>Quality (0.1–1.0)</label><input id="quality" type="number" value="0.8" min="0.1" max="1" step="0.05"></div>
+      </div>
+      <button class="ghost" id="compressAll">🗜 Compress all</button> <button class="ghost small" id="resetAll">Use all originals</button>
+      <div class="bar" id="cBar" style="display:none"><i></i></div>
+    </details>
+    <div class="out" id="oPrep"></div>
+    <div id="table" style="overflow-x:auto"></div>
+    <div class="note" id="totals"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>Pay and inscribe</h2>
+    <p class="sub">The app makes a batch with its own temporary key (saved on this computer so the money can always be recovered),
+      and gives you ONE address and an exact amount. Pay it from any Bitcoin wallet. The inscriptions go to your ordinals address:
+      <code id="toAddr">…</code></p>
+    <div class="row"><div><label>Pieces in this batch: from</label><input id="from" type="number" min="1" value="1"></div>
+      <div><label>to</label><input id="to" type="number" min="1"></div></div>
+    <p class="sub">Up to 50 pieces per batch; big collections go in several batches.</p>
+    <div class="chk" id="mainnetBox" style="display:none"><input type="checkbox" id="iUnderstand"><label for="iUnderstand" style="margin:0" id="mainnetLabel">I understand this spends real bitcoin and inscriptions are permanent.</label></div>
+    <button id="startBatch">⚡ Create the batch</button>
+    <div class="out" id="oStart"></div>
+  </div>
+
+  <div class="card"><h2><span class="n">3</span>Batches</h2><div id="batches" class="sub">No batches yet.</div></div>
+
+  <div class="card">
+    <h2><span class="n">4</span>Collection file</h2>
+    <p class="sub">When pieces are inscribed, this makes the list marketplaces (for example Magic Eden) ask for when you submit a collection:
+      every inscription id with its name and traits.</p>
+    <button class="ghost" id="collFile">📄 Make the collection file</button>
+    <div class="out" id="oColl"></div>
+  </div>
+</main>
+<script type="module" src="/static/inscribe.js"></script>
+</body></html>

@@ -33,7 +33,7 @@ PROJECTS = Path(os.environ.get("SOS_MINTER_PROJECTS") or (DATA / "projects"))
 CONFIG = DATA / "config.json"
 PORT = int(os.environ.get("SOS_MINTER_PORT", "8130"))
 MAX_BODY = 256 * 1024 * 1024          # one upload request; the page sends big collections in chunks
-SECRET_KEYS = ("pinata_jwt",)          # never sent back to the browser
+SECRET_KEYS = ("pinata_jwt", "rpc_pass")   # never sent back to the browser
 
 DEFAULT_CONFIG = {
     "setup_done": False,
@@ -52,6 +52,18 @@ DEFAULT_CONFIG = {
     "writer_model": "qwen2.5:14b",
     "royalty_pct": 5,
     "rarity_tiers": None,
+    # ---- Bitcoin Ordinals ----
+    "chain": "stacks",                 # stacks | ordinals
+    "btc_network": "testnet4",         # mainnet | testnet4 | signet | regtest
+    "btc_backend": "esplora",          # esplora (mempool.space or your own) | rpc (your own Bitcoin Core)
+    "esplora_url": "",                 # blank = mempool.space for the chosen network
+    "rpc_url": "http://127.0.0.1:8332",
+    "rpc_user": "",
+    "rpc_pass": "",
+    "ord_address": "",                 # your ordinals (taproot) address: inscriptions land here
+    "refund_address": "",              # leftover sats go back here
+    "ord_postage": 546,                # sats that travel with each inscription
+    "ord_story_onchain": True,         # inscribe the story + traits with the art
 }
 
 # ---------------- config ----------------
@@ -80,6 +92,11 @@ def public_config(cfg):
     return out
 
 _ADDR_RE = re.compile(r"^S[PMTN][0-9A-HJKMNP-TV-Z]{38,40}$")
+_BTC_HRP = {"mainnet": "bc", "testnet4": "tb", "signet": "tb", "regtest": "bcrt"}
+def _btc_addr_ok(a, network):
+    """Bech32/bech32m address for this network (segwit v0 or taproot). Exact checksum is verified again in the page."""
+    hrp = _BTC_HRP.get(network, "bc")
+    return bool(re.fullmatch(hrp + r"1[02-9ac-hj-np-z]{8,87}", a.lower())) and (a == a.lower() or a == a.upper())
 _URL_RE = re.compile(r"^https?://[A-Za-z0-9._~:/?#\[\]@!$&()*+,;=%-]+$")   # plain ASCII URL characters only
 
 def update_config(body):
@@ -113,8 +130,36 @@ def update_config(body):
             try: cfg["royalty_pct"] = max(0.0, min(30.0, float(body["royalty_pct"])))
             except Exception: errs.append("royalty must be a number")
         if "setup_done" in body: cfg["setup_done"] = bool(body["setup_done"])
+        # ---- Bitcoin Ordinals settings ----
+        if "chain" in body:
+            if body["chain"] in ("stacks", "ordinals"): cfg["chain"] = body["chain"]
+            else: errs.append("chain must be stacks or ordinals")
+        if "btc_network" in body:
+            if body["btc_network"] in _BTC_HRP: cfg["btc_network"] = body["btc_network"]
+            else: errs.append("bitcoin network must be mainnet, testnet4, signet or regtest")
+        if "btc_backend" in body:
+            if body["btc_backend"] in ("esplora", "rpc"): cfg["btc_backend"] = body["btc_backend"]
+            else: errs.append("data source must be esplora or rpc")
+        for k in ("esplora_url", "rpc_url"):
+            if k in body:
+                v = str(body[k]).strip().rstrip("/")
+                if v and not _URL_RE.match(v): errs.append(f"{k} must start with http:// or https://")
+                else: cfg[k] = v
+        if "rpc_user" in body: cfg["rpc_user"] = str(body["rpc_user"]).strip()[:100]
+        if body.get("rpc_pass"): cfg["rpc_pass"] = str(body["rpc_pass"])[:200]
+        for k in ("ord_address", "refund_address"):
+            if k in body:
+                v = str(body[k]).strip()
+                if v and not _btc_addr_ok(v, cfg["btc_network"]): errs.append(f"that {k.replace('_', ' ')} isn't a valid {cfg['btc_network']} Bitcoin address")
+                else: cfg[k] = v
+        if "ord_postage" in body:
+            try: cfg["ord_postage"] = max(546, min(100000, int(body["ord_postage"])))
+            except Exception: errs.append("postage must be a whole number of sats")
+        if "ord_story_onchain" in body: cfg["ord_story_onchain"] = bool(body["ord_story_onchain"])
+        if cfg.get("chain") == "ordinals" and cfg.get("btc_network") == "regtest" and cfg.get("btc_backend") != "rpc":
+            errs.append("regtest needs your own Bitcoin Core node (data source: rpc)")
         a = cfg.get("owner_address", "")
-        if a and (a[:2] in ("ST", "SN")) != (cfg["network"] == "testnet"):
+        if cfg.get("chain", "stacks") == "stacks" and a and (a[:2] in ("ST", "SN")) != (cfg["network"] == "testnet"):
             errs.append("your address doesn't match the network: testnet addresses start with ST, mainnet with SP")
         if cfg["link_style"] == "gateway" and not cfg.get("public_gateway"):
             errs.append("gateway links need your public gateway address")
@@ -847,8 +892,179 @@ def record_tx(body):
     _write_state(base, **upd)
     return 200, {"ok": True}
 
+# ---------------- Bitcoin Ordinals: reading the chain + broadcasting (your node or mempool.space) ----------------
+_ESPLORA_DEFAULT = {"mainnet": "https://mempool.space/api", "testnet4": "https://mempool.space/testnet4/api",
+                    "signet": "https://mempool.space/signet/api"}
+_TXID = re.compile(r"^[0-9a-f]{64}$")
+
+def _esplora(cfg):
+    base = (cfg.get("esplora_url") or _ESPLORA_DEFAULT.get(cfg.get("btc_network"), "")).rstrip("/")
+    if not base: raise RuntimeError("no data source for this network — set your own node in Settings")
+    return base
+
+def _rpc(cfg, method, params=None):
+    auth = base64.b64encode(f"{cfg.get('rpc_user', '')}:{cfg.get('rpc_pass', '')}".encode()).decode()
+    body = json.dumps({"jsonrpc": "1.0", "id": "sosm", "method": method, "params": params or []}).encode()
+    req = urllib.request.Request(cfg.get("rpc_url", "http://127.0.0.1:8332"), data=body,
+                                 headers={"Content-Type": "application/json", "Authorization": "Basic " + auth})
+    try:
+        r = json.loads(urllib.request.urlopen(req, timeout=60).read())
+    except urllib.error.HTTPError as e:
+        try: r = json.loads(e.read())
+        except Exception: raise RuntimeError(f"your node answered HTTP {e.code} (check the RPC user/password)")
+    if r.get("error"): raise RuntimeError(str(r["error"].get("message", r["error"]))[:200])
+    return r.get("result")
+
+def btc_fees(cfg):
+    """sat/vB presets: fast / normal / slow / minimum."""
+    if cfg.get("btc_backend") == "rpc":
+        def est(n):
+            try: return max(1.0, round(float(_rpc(cfg, "estimatesmartfee", [n]).get("feerate", 0)) * 1e5, 1))
+            except Exception: return 1.0
+        return {"fast": est(1), "normal": est(3), "slow": est(6), "minimum": 1.0}
+    base = _esplora(cfg)
+    try:
+        d = json.loads(urllib.request.urlopen(base + "/v1/fees/recommended", timeout=15).read())
+        return {"fast": d["fastestFee"], "normal": d["halfHourFee"], "slow": d["hourFee"], "minimum": d.get("minimumFee", 1)}
+    except Exception:
+        d = json.loads(urllib.request.urlopen(base + "/fee-estimates", timeout=15).read())
+        g = lambda k: round(float(d.get(k, 1)), 1)
+        return {"fast": g("1"), "normal": g("3"), "slow": g("6"), "minimum": g("144")}
+
+def btc_utxos(cfg, address):
+    if not _btc_addr_ok(address, cfg.get("btc_network")): raise RuntimeError("not an address on this network")
+    if cfg.get("btc_backend") == "rpc":
+        res = _rpc(cfg, "scantxoutset", ["start", [f"addr({address})"]]) or {}
+        return [{"txid": u["txid"], "vout": u["vout"], "value": int(round(u["amount"] * 1e8)), "confirmed": True} for u in res.get("unspents", [])]
+    d = json.loads(urllib.request.urlopen(f"{_esplora(cfg)}/address/{address}/utxo", timeout=20).read())
+    return [{"txid": u["txid"], "vout": u["vout"], "value": u["value"], "confirmed": bool(u.get("status", {}).get("confirmed"))} for u in d]
+
+def btc_broadcast(cfg, hexstr):
+    if not re.fullmatch(r"[0-9a-f]{120,800000}", hexstr or ""): raise RuntimeError("not a raw transaction")
+    if cfg.get("btc_backend") == "rpc": return _rpc(cfg, "sendrawtransaction", [hexstr])
+    req = urllib.request.Request(f"{_esplora(cfg)}/tx", data=hexstr.encode(), headers={"Content-Type": "text/plain"})
+    try: return urllib.request.urlopen(req, timeout=30).read().decode().strip()
+    except urllib.error.HTTPError as e: raise RuntimeError("the network refused it: " + e.read().decode(errors="ignore")[:300])
+
+def btc_tx(cfg, txid):
+    if not _TXID.match(txid or ""): raise RuntimeError("bad txid")
+    if cfg.get("btc_backend") == "rpc":
+        try:
+            t = _rpc(cfg, "getrawtransaction", [txid, True])
+            return {"found": True, "confirmed": int(t.get("confirmations", 0)) > 0, "confirmations": int(t.get("confirmations", 0))}
+        except RuntimeError:
+            o = _rpc(cfg, "gettxout", [txid, 0, True])
+            return {"found": bool(o), "confirmed": bool(o) and int(o.get("confirmations", 0)) > 0, "confirmations": int((o or {}).get("confirmations", 0))}
+    try:
+        d = json.loads(urllib.request.urlopen(f"{_esplora(cfg)}/tx/{txid}/status", timeout=20).read())
+        return {"found": True, "confirmed": bool(d.get("confirmed")), "height": d.get("block_height")}
+    except urllib.error.HTTPError as e:
+        if e.code == 404: return {"found": False, "confirmed": False}
+        raise
+
+def btc_check(cfg, body):
+    c = {**cfg, **{k: body[k] for k in ("btc_network", "btc_backend", "esplora_url", "rpc_url", "rpc_user") if k in body}}
+    if body.get("rpc_pass"): c["rpc_pass"] = body["rpc_pass"]
+    for k in ("esplora_url", "rpc_url"):
+        if c.get(k) and not _URL_RE.match(str(c[k])): return 400, {"error": f"{k} must start with http:// or https://"}
+    try:
+        if c.get("btc_backend") == "rpc":
+            info = _rpc(c, "getblockchaininfo")
+            want = {"mainnet": "main", "testnet4": "testnet4", "signet": "signet", "regtest": "regtest"}[c.get("btc_network", "mainnet")]
+            if info.get("chain") != want: return 200, {"ok": False, "detail": f"your node is on '{info.get('chain')}', not {c.get('btc_network')}"}
+            return 200, {"ok": True, "detail": f"your Bitcoin node is on {info.get('chain')} at block {info.get('blocks')}", "fees": btc_fees(c)}
+        h = urllib.request.urlopen(_esplora(c) + "/blocks/tip/height", timeout=15).read().decode().strip()
+        return 200, {"ok": True, "detail": f"{_esplora(c).split('/')[2]} answers: block {h}", "fees": btc_fees(c)}
+    except Exception as e:
+        return 200, {"ok": False, "detail": f"can't reach it ({type(e).__name__}: {str(e)[:120]})"}
+
+# ---------------- Ordinals: pieces + batches (the temporary key lives here, owner-only) ----------------
+def _ord_dir(name):
+    d = project_path(name) / "ordinals"; d.mkdir(parents=True, exist_ok=True); return d
+
+def ord_pieces(cfg, body):
+    """Each piece as it will be inscribed: the chosen file (a compressed version if you made one) + its metadata."""
+    name = str(body.get("collection_name", "")).strip()
+    base = project_path(name)
+    imgs = list_images(base / "images")
+    if not imgs: return 400, {"error": "add your images first (step 1)"}
+    story = body.get("story_onchain", cfg.get("ord_story_onchain", True))
+    odir = base / "ordinals"; out = []
+    for i, img in enumerate(imgs, 1):
+        alt = next((f for f in sorted(odir.glob(f"{i:04d}.*")) if f.suffix.lower() in IMG_EXTS), None) if odir.exists() else None
+        f = alt or img; raw = f.read_bytes()
+        meta = {}
+        mf = _meta_file(base, i)
+        if mf.exists():
+            try:
+                m = json.loads(mf.read_text())
+                meta = {"name": m.get("name") or f"{name} #{i:04d}", "collection": name,
+                        "attributes": [a for a in m.get("attributes", []) if a.get("trait_type") != "Collection"]}
+                if story and m.get("description"): meta["description"] = m["description"]
+            except Exception: meta = {}
+        if not meta: meta = {"name": f"{name} #{i:04d}", "collection": name}
+        out.append({"id": i, "contentType": _CT.get(f.suffix.lower(), "application/octet-stream"), "bytes": len(raw),
+                    "compressed": bool(alt), "original_bytes": img.stat().st_size, "body": base64.b64encode(raw).decode(),
+                    "metadata": meta, "img": f"/api/img?c={urllib.parse.quote(name)}&id={i}"})
+    return 200, {"ok": True, "pieces": out}
+
+def ord_set_content(body):
+    """Save the compressed version of one piece (or remove it to go back to the original)."""
+    name = str(body.get("collection_name", "")).strip(); i = int(body.get("id") or 0)
+    base = project_path(name)
+    if not 1 <= i <= len(list_images(base / "images")): return 400, {"error": "no such piece"}
+    odir = _ord_dir(name)
+    for f in odir.glob(f"{i:04d}.*"): f.unlink()
+    if body.get("reset"): return 200, {"ok": True, "reset": True}
+    data = str(body.get("data", ""))
+    if data.startswith("data:") and "," in data: data = data.split(",", 1)[1]
+    try: raw = base64.b64decode(data, validate=False)
+    except Exception: return 400, {"error": "bad image data"}
+    ext = _img_ext(raw)
+    if not ext: return 400, {"error": "not an image"}
+    (odir / f"{i:04d}{ext}").write_bytes(raw)
+    return 200, {"ok": True, "bytes": len(raw)}
+
+_BATCH_ID = re.compile(r"^[a-z0-9-]{6,40}$")
+def _batch_file(name, bid):
+    if not _BATCH_ID.match(bid or ""): raise ValueError("bad batch id")
+    d = _ord_dir(name) / "batches"; d.mkdir(exist_ok=True); os.chmod(d, 0o700)
+    return d / f"{bid}.json"
+
+def ord_batch_save(body):
+    name = str(body.get("collection_name", "")).strip(); b = body.get("batch")
+    if not isinstance(b, dict): return 400, {"error": "no batch"}
+    f = _batch_file(name, str(b.get("id", "")))
+    old = json.loads(f.read_text()) if f.exists() else {}
+    if old.get("key") and b.get("key") and old["key"] != b["key"]: return 409, {"error": "this batch already has a different key — refusing to overwrite it"}
+    merged = {**old, **b}
+    tmp = f.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)                 # holds the temporary key: owner-only
+    with os.fdopen(fd, "w") as fh: fh.write(json.dumps(merged))
+    tmp.replace(f)
+    return 200, {"ok": True}
+
+def ord_batches(body):
+    name = str(body.get("collection_name", "")).strip()
+    d = project_path(name) / "ordinals" / "batches"
+    out = [json.loads(f.read_text()) for f in sorted(d.glob("*.json"))] if d.exists() else []
+    return 200, {"ok": True, "batches": out}
+
+def ord_collection_file(body):
+    """The list marketplaces (Magic Eden etc.) ask for: every inscription id with its name and traits."""
+    name = str(body.get("collection_name", "")).strip()
+    _, r = ord_batches({"collection_name": name}); items = []
+    for b in r["batches"]:
+        for it in b.get("items", []):
+            if it.get("inscription_id"):
+                m = (b.get("snapshot", {}).get(str(it["id"])) or {}).get("metadata", {})
+                items.append({"id": it["inscription_id"], "meta": {"name": m.get("name", f"{name} #{it['id']:04d}"), "attributes": m.get("attributes", [])}})
+    items.sort(key=lambda x: x["meta"]["name"])
+    f = project_path(name) / "ordinals" / "collection.json"; f.write_text(json.dumps(items, indent=2))
+    return 200, {"ok": True, "count": len(items), "items": items, "path": str(f)}
+
 # ---------------- HTTP ----------------
-PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html",
+PAGES = {"/": "index.html", "/index.html": "index.html", "/setup": "setup.html", "/guide": "guide.html", "/inscribe": "inscribe.html",
          "/mint": "mint.html", "/settings": "setup.html"}
 STATIC = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json"}
 # the only files /static/ can ever serve: the app's own web/ folder, listed once at startup
@@ -939,6 +1155,16 @@ class H(BaseHTTPRequestHandler):
             if p == "/api/token-edit": return self._send(*token_edit(body))
             if p == "/api/publish": return self._send(*do_publish(cfg, body))
             if p == "/api/record-tx": return self._send(*record_tx(body))
+            if p == "/api/btc/check": return self._send(*btc_check(cfg, body))
+            if p == "/api/btc/fees": return self._send(200, btc_fees(cfg))
+            if p == "/api/btc/utxos": return self._send(200, {"utxos": btc_utxos(cfg, str(body.get("address", "")))})
+            if p == "/api/btc/broadcast": return self._send(200, {"txid": btc_broadcast(cfg, str(body.get("hex", "")))})
+            if p == "/api/btc/tx": return self._send(200, btc_tx(cfg, str(body.get("txid", ""))))
+            if p == "/api/ord/pieces": return self._send(*ord_pieces(cfg, body))
+            if p == "/api/ord/set-content": return self._send(*ord_set_content(body))
+            if p == "/api/ord/batch-save": return self._send(*ord_batch_save(body))
+            if p == "/api/ord/batches": return self._send(*ord_batches(body))
+            if p == "/api/ord/collection-file": return self._send(*ord_collection_file(body))
         except Exception as e:
             return self._send(500, {"error": f"{type(e).__name__}: {e}"})
         return self._send(404, {"error": "not found"})

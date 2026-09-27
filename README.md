@@ -19,6 +19,17 @@ Bring a folder of art. Get a finished NFT collection:
 **It never asks for your seed phrase or private key.** Every transaction is approved by you, in your wallet.
 There's no account, no server of ours, no tracking, and no fee. You pay only normal network fees.
 
+## Stacks or Bitcoin Ordinals
+
+The first setup question asks where to mint:
+
+- **Stacks:** a SIP-009 contract with royalties, re-pointing and freezing; the art lives on IPFS.
+- **Bitcoin Ordinals:** the art and its story are **inscribed directly onto Bitcoin**, forever. The Inscribe page shows the exact
+  cost of every piece (you pay by the byte), compresses them to WebP with one button, gives you **one address and an exact
+  amount** to pay from any wallet, then commits and reveals the batch and sends each inscription to your Ordinals address.
+  The batch's temporary key is saved locally before you pay, so funds can always be recovered. Works with mempool.space or your
+  own Bitcoin Core node, and makes the collection file marketplaces ask for. Verified end to end on regtest against `ord`.
+
 ## Why it exists
 
 An NFT on the blockchain is only a pointer. The picture and its story live on IPFS, and **if nobody keeps those files

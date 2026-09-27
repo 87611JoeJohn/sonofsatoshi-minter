@@ -52,6 +52,26 @@ check(nan_ok, "a non-number royalty is refused")
 srv._write_state(srv.PROJECTS / "Real_One", base_uri="ipfs://bafyx/metadata/{id}.json", published_count=1)
 check(srv.mint_info(srv.load_config(), "Real One")[1].get("ready") is False, "mint is blocked when images changed after storing")
 
+# Bitcoin Ordinals
+check(srv._btc_addr_ok("bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "mainnet"), "mainnet taproot address accepted")
+check(not srv._btc_addr_ok("tb1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "mainnet"), "testnet address refused on mainnet")
+check(srv.update_config({"chain": "ordinals", "btc_network": "regtest", "btc_backend": "esplora"})[0] == 400, "regtest without your own node is refused")
+srv.update_config({"chain": "ordinals", "btc_network": "testnet4", "btc_backend": "rpc", "rpc_pass": "hunter2"})
+check("rpc_pass" not in srv.public_config(srv.load_config()) and srv.public_config(srv.load_config()).get("rpc_pass_set"), "node RPC password is never sent to the browser")
+check(srv.btc_check(srv.load_config(), {"esplora_url": "file:///etc/passwd", "btc_backend": "esplora"})[0] == 400, "chain data source must be http(s)")
+try: srv._batch_file("Real One", "../../evil"); bad = False
+except ValueError: bad = True
+check(bad, "batch ids can't escape the batches folder")
+srv.ord_batch_save({"collection_name": "Real One", "batch": {"id": "btest01", "key": "aa" * 32, "status": "awaiting-funds"}})
+bf = srv._batch_file("Real One", "btest01")
+check(stat.S_IMODE(os.stat(bf).st_mode) == 0o600, "batch file with the temporary key is owner-only (600)")
+check(srv.ord_batch_save({"collection_name": "Real One", "batch": {"id": "btest01", "key": "bb" * 32}})[0] == 409, "a batch's key can never be replaced")
+check(srv.ord_set_content({"collection_name": "Real One", "id": 1, "data": base64.b64encode(b"not an image").decode()})[0] == 400, "compressed version must be an image")
+try: srv.btc_broadcast(srv.load_config(), "zz"); bad2 = False
+except RuntimeError: bad2 = True
+check(bad2, "broadcast only accepts a raw transaction")
+srv.update_config({"chain": "stacks"})
+
 # HTTP guards
 t = threading.Thread(target=srv.ThreadingHTTPServer(("127.0.0.1", 18731), srv.H).serve_forever, daemon=True); t.start()
 def req(path, method="GET", headers=None, body=None):

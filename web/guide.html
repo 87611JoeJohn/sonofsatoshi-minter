@@ -26,6 +26,7 @@
   <a href="#costs">13. Costs</a>
   <a href="#safety">14. Safety</a>
   <a href="#trouble">15. When something goes wrong</a>
+  <a href="#ordinals">16. Bitcoin Ordinals (inscribe on Bitcoin itself)</a>
 </div>
 
 <div class="card">
@@ -257,5 +258,55 @@ ollama pull qwen2.5:14b    # writes the stories (smaller computer? try llama3.2)
 </table>
 </div>
 
+
+<div class="card">
+<h2 id="ordinals">16. Bitcoin Ordinals: inscribe on Bitcoin itself</h2>
+<p>Instead of Stacks, you can inscribe your collection <b>directly onto Bitcoin</b> as Ordinals. The art and its story are
+  written into Bitcoin transactions, so they live on-chain forever: no IPFS, no gateway, nothing to keep online, nothing that can
+  go blank. Choose <b>Bitcoin Ordinals</b> on the first question of the setup (or in ⚙ Settings).</p>
+<h3>What's different from Stacks</h3>
+<ul>
+  <li><b>You pay by the byte.</b> Every byte of the image goes on-chain. A 2 MB PNG can cost hundreds of dollars; a well-compressed
+    WebP of 30–80 KB costs a small fraction and looks the same on a phone. The Inscribe page shows the exact cost of every piece
+    and compresses them all with one button (you choose the size and quality).</li>
+  <li><b>It's permanent.</b> There's no re-point, no edit and no freeze: what you inscribe is final. Review everything first.</li>
+  <li><b>No contract, no royalties.</b> Each piece is its own inscription. Marketplaces group them into a collection from the
+    <b>collection file</b> the app makes for you (step 4 of the Inscribe page).</li>
+  <li><b>The story and traits can go on-chain</b> with the art, as the inscription's metadata (a checkbox on the Inscribe page).</li>
+</ul>
+<h3>What you need</h3>
+<ul>
+  <li>An <b>ordinals-aware wallet</b> (Xverse or Leather). Give the app its <b>Ordinals</b> address (taproot, starts with
+    <code>bc1p</code>, or <code>tb1p</code> on testnet). Never send inscriptions to an ordinary wallet: it can spend them as fees
+    without warning.</li>
+  <li>A <b>refund address</b>: any address of yours. Leftover coins come back there.</li>
+  <li>A <b>data source</b>: mempool.space (nothing to run), your own mempool/esplora server, or your own Bitcoin Core node (fully
+    sovereign: give its RPC address, user and password; it's used to read the chain and to send your transactions).</li>
+</ul>
+<h3>How inscribing works</h3>
+<ol>
+  <li><b>Prepare:</b> pick a fee rate, compress the pieces if you want, and check the total.</li>
+  <li><b>Create the batch:</b> the app makes a temporary key for this batch <b>and saves it on your computer before showing you
+    anything</b>, then shows ONE address and an exact amount. Pay it from any wallet.</li>
+  <li><b>Commit:</b> once your payment arrives, the app splits it into one output per piece and sends that transaction.</li>
+  <li><b>Reveal:</b> after the commit confirms (about 10 minutes), it writes each piece in its own transaction and sends the inscribed
+    sat (546 sats of "postage") to your Ordinals address.</li>
+</ol>
+<p>You can close the page at any time: it picks up where it stopped. Up to 50 pieces per batch; bigger collections use several.</p>
+<h3>If something goes wrong</h3>
+<ul>
+  <li><b>Changed your mind before the commit?</b> Press <b>Recover funds</b>: everything on the funding address goes back to your
+    refund address.</li>
+  <li><b>Paid too little?</b> Send the rest to the same address; the page adds it up. <b>Paid too much?</b> The extra comes back to
+    your refund address automatically.</li>
+  <li><b>After the commit</b>, the money can only continue into the inscriptions: that's the recovery, and the app does it by itself
+    when you reopen the page. The temporary keys live in <code>~/SonOfSatoshi-Minter/projects/&lt;Name&gt;/ordinals/batches/</code>
+    (readable only by you). <b>Back that folder up and never share it.</b></li>
+</ul>
+<h3>Practice first</h3>
+<p>Choose <b>Testnet4</b> in the setup, switch Xverse to Testnet4, and get free test coins from a testnet4 faucet
+  (for example <a href="https://mempool.space/testnet4/faucet" target="_blank" rel="noopener">mempool.space's</a>). Inscribe a couple of
+  small pieces end to end before spending real bitcoin.</p>
+</div>
 </main>
 </body></html>

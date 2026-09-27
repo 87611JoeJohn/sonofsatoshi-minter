@@ -24,7 +24,7 @@ function openProject(n) {
   $('#cname').value = n; syncMintLink(); loadReview();
   $('#cname').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-function syncMintLink() { $('#mintLink').href = '/mint?name=' + encodeURIComponent(NAME()); }
+function syncMintLink() { $('#mintLink').href = (CFG.chain === 'ordinals' ? '/inscribe?name=' : '/mint?name=') + encodeURIComponent(NAME()); }
 
 // ---------- step 1: upload in chunks (big collections never hit one giant request) ----------
 const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
@@ -207,8 +207,19 @@ $('#cname').addEventListener('input', syncMintLink);
 
 (async () => {
   CFG = await api('/api/config');
-  const nb = $('#net'); nb.textContent = CFG.network === 'mainnet' ? 'MAINNET · real STX' : 'testnet · practice';
-  if (CFG.network === 'mainnet') nb.classList.add('main');
+  const nb = $('#net');
+  if (CFG.chain === 'ordinals') {
+    nb.textContent = CFG.btc_network === 'mainnet' ? 'BITCOIN · real BTC' : 'bitcoin ' + CFG.btc_network + ' · practice';
+    if (CFG.btc_network === 'mainnet') nb.classList.add('main');
+    $('#pubBtn').closest('.card').style.display = 'none';                     // no IPFS: the art goes on-chain
+    const c5 = $('#mintLink').closest('.card');
+    c5.querySelector('h2').innerHTML = '<span class="n">4</span>Inscribe on Bitcoin';
+    c5.querySelector('.sub').textContent = 'Compress the pieces, see the exact cost, then pay one address from any Bitcoin wallet. The art is written onto Bitcoin itself.';
+    $('#mintLink').textContent = '🟠 Go to inscribe →';
+  } else {
+    nb.textContent = CFG.network === 'mainnet' ? 'MAINNET · real STX' : 'testnet · practice';
+    if (CFG.network === 'mainnet') nb.classList.add('main');
+  }
   $('#storeName').textContent = { node: 'your IPFS node', pinata: 'Pinata', both: 'your IPFS node and Pinata' }[CFG.storage] || 'your storage';
   $('#royPct').value = CFG.royalty_pct ?? 5;
   $('#aiBox').style.display = CFG.ai_enabled ? '' : 'none'; $('#aiOff').style.display = CFG.ai_enabled ? 'none' : '';

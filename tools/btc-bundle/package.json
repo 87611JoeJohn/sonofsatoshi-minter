@@ -1,0 +1,11 @@
+{
+  "name": "sonofsatoshi-minter-btc-bundle",
+  "private": true,
+  "description": "Rebuilds web/btc.js reproducibly. See build.sh.",
+  "dependencies": {
+    "@scure/btc-signer": "2.4.1",
+    "micro-ordinals": "0.4.0",
+    "@scure/base": "2.4.0",
+    "esbuild": "0.28.2"
+  }
+}
