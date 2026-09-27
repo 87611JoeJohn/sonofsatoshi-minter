@@ -1029,7 +1029,9 @@ _BATCH_ID = re.compile(r"^[a-z0-9-]{6,40}$")
 def _batch_file(name, bid):
     if not _BATCH_ID.match(bid or ""): raise ValueError("bad batch id")
     d = _ord_dir(name) / "batches"; d.mkdir(exist_ok=True); os.chmod(d, 0o700)
-    return d / f"{bid}.json"
+    root = os.path.realpath(str(d)); full = os.path.realpath(os.path.join(root, bid + ".json"))
+    if not full.startswith(root + os.sep) or os.path.dirname(full) != root: raise ValueError("bad batch id")
+    return Path(full)
 
 def ord_batch_save(body):
     name = str(body.get("collection_name", "")).strip(); b = body.get("batch")

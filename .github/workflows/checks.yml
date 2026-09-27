@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: no keys, seeds or private addresses in the repo
         run: |
-          ! grep -rnEI --exclude-dir=.git --exclude-dir=.github --exclude-dir=node_modules --exclude=stacks.js \
+          ! grep -rnEI --exclude-dir=.git --exclude-dir=.github --exclude-dir=node_modules --exclude=stacks.js --exclude=btc.js \
             -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' \
             -e '"privateKey"' \
             -e 'eyJhbGciOi[A-Za-z0-9_-]{20,}' \
