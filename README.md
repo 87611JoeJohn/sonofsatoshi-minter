@@ -43,6 +43,19 @@ The first setup question asks where to mint:
   through your wallet. Practice on Sepolia or Base Sepolia. The compiled contract is rebuilt byte for byte and tested against a
   local chain in CI, and the whole flow was verified end to end in a browser against anvil.
 
+## Walkthroughs
+
+Step by step, from setup to minted, for each chain:
+
+| Chain | Walkthrough |
+|---|---|
+| 🟣 Stacks | [Quick start](#quick-start) and [Deploy and mint](#deploy-and-mint) below |
+| 🟠 Bitcoin Ordinals | [docs/walkthrough-bitcoin-ordinals.md](docs/walkthrough-bitcoin-ordinals.md) |
+| 🟪 Solana | [docs/walkthrough-solana.md](docs/walkthrough-solana.md) |
+| 💠 Ethereum / 🔵 Base | [docs/walkthrough-ethereum-base.md](docs/walkthrough-ethereum-base.md) |
+
+The app also has the full Guide built in (📖 Guide in the top bar).
+
 ## Why it exists
 
 An NFT on the blockchain is only a pointer. The picture and its story live on IPFS, and **if nobody keeps those files
